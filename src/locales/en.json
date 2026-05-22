@@ -110,8 +110,8 @@
     "active_label": "Active",
     "rename_action": "Rename",
     "avatar_action": "Profile picture",
-    "clear_cookies_action": "Clear cookies",
-    "clear_cookies_header": "Clear cookies — {name}",
+    "clear_cookies_action": "Clear session",
+    "clear_cookies_header": "Clear session — {name}",
     "add_new_button": "New profile"
   },
   "profiles": {

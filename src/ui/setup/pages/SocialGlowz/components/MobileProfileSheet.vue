@@ -121,7 +121,7 @@
             </div>
           </div>
 
-          <!-- Clear cookies per network (expandable per profile) -->
+          <!-- Clear network session data per profile. -->
           <div
             v-if="clearCookiesProfileId"
             class="clear-cookies-section"
@@ -266,7 +266,7 @@ const addInputRef = ref<HTMLInputElement | null>(null)
 const avatarFileInput = ref<HTMLInputElement | null>(null)
 const pendingAvatarProfileId = ref<string | null>(null)
 
-// ─── Clear cookies per network ────────────────────────────────
+// ─── Clear network session per profile ────────────────────────
 const clearCookiesProfileId = ref<string | null>(null)
 const clearedNetworks = ref<Record<string, boolean>>({})
 
@@ -293,7 +293,7 @@ function clearNetworkCookies(networkId: string) {
       : Promise.resolve()
     return p.then(() => invoke('delete_network_session', { profileId, networkId }))
   }).catch(e => {
-    console.error('Failed to clear cookies:', e)
+    console.error('Failed to clear network session:', e)
   })
 }
 

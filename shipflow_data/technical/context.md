@@ -105,6 +105,8 @@ SocialGlowz est une application social multi-canaux avec une base Vue 3 commune 
 - État local : Pinia + localStorage via stores.
 - Sync cloud : `src/lib/cloudSyncQueue.ts`, `src/lib/cloudSettings.ts`, `src/lib/cloudSync.ts`.
 - Backend : tables Convex (`users`, `socialAccounts`, `activeAccounts`, `settings`, `profiles`, `customLinks`, `friendsFilters`, `subscriptions`).
+- Android WebView (plugin natif) : cookies + snapshots `localStorage` persistés par session `${profileId}-${networkId}` et par origin, avec mode dégradé explicite si `DOCUMENT_START_SCRIPT` ou `WEB_MESSAGE_LISTENER` ne sont pas disponibles.
+- Non couvert par cette isolation Android : IndexedDB, CacheStorage, service workers, HTTP cache WebView global, et credential stores système.
 
 ### 4) Extension surfaces
 

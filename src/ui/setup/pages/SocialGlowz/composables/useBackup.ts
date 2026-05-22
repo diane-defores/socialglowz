@@ -22,17 +22,19 @@ async function collectStoreData(): Promise<string> {
   const customLinks = useCustomLinksStore()
   const onboarding = useOnboardingStore()
   let androidCookieSnapshot = ''
+  let androidLocalStorageSnapshot = ''
 
   if (isAndroidTauri()) {
     try {
       const { invoke } = await import('@tauri-apps/api/core')
-      const result = await invoke<{ cookiesJson: string }>(
+      const result = await invoke<{ cookiesJson?: string; localStorageJson?: string }>(
         'plugin:android-webview|export_cookies_for_backup',
         {},
       )
       androidCookieSnapshot = result.cookiesJson ?? ''
+      androidLocalStorageSnapshot = result.localStorageJson ?? ''
     } catch (error) {
-      console.warn('[backup] Failed to export Android cookies snapshot', error)
+      console.warn('[backup] Failed to export Android session snapshot', error)
     }
   }
 
@@ -75,6 +77,7 @@ async function collectStoreData(): Promise<string> {
     },
     android: {
       cookieSnapshot: androidCookieSnapshot,
+      localStorageSnapshot: androidLocalStorageSnapshot,
     },
   }
   return JSON.stringify(data)
@@ -167,9 +170,10 @@ async function applyStoreData(json: string) {
       const { invoke } = await import('@tauri-apps/api/core')
       await invoke('plugin:android-webview|import_cookies_from_backup', {
         cookiesJson: data.android?.cookieSnapshot ?? '',
+        localStorageJson: data.android?.localStorageSnapshot ?? '',
       })
     } catch (error) {
-      console.warn('[backup] Failed to import Android cookies snapshot', error)
+      console.warn('[backup] Failed to import Android session snapshot', error)
     }
   }
 }

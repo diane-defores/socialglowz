@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.graphics.Outline
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Build
 import android.util.Log
 import android.view.Gravity
@@ -39,6 +40,7 @@ import androidx.core.graphics.PathParser
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import androidx.webkit.ScriptHandler
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
@@ -46,6 +48,7 @@ import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import java.net.URL
+import org.json.JSONObject
 
 private const val TAG = "SFZ"
 private const val TEXT_ZOOM_MIN = 75
@@ -54,6 +57,9 @@ private const val TEXT_ZOOM_STEP = 5
 private const val TEXT_ZOOM_DEFAULT = 100
 private const val TEXT_ZOOM_RANGE_STEPS = (TEXT_ZOOM_MAX - TEXT_ZOOM_MIN) / TEXT_ZOOM_STEP
 private const val DEFAULT_TAP_SOUND_VARIANT = "classic"
+private const val STORAGE_BRIDGE_OBJECT = "sfzStorageBridge"
+private const val LOCAL_STORAGE_PREFS_NAME = "sfz_local_storage"
+private const val LOCAL_STORAGE_CAPTURE_MAX_BYTES = 262_144
 private val TAP_SOUND_ASSETS = mapOf(
     "classic" to "sounds/click.wav",
     "soft" to "sounds/soft.wav",
@@ -129,6 +135,7 @@ class SaveBackupArgs {
 @InvokeArg
 class ImportCookiesBackupArgs {
     var cookiesJson: String = ""
+    var localStorageJson: String = ""
 }
 
 // Lightweight profile data for the popup menu
@@ -137,6 +144,12 @@ private data class ProfileMenuItem(
     val name: String,
     val emoji: String,
     val avatar: String? = null
+)
+
+private data class SessionIdentity(
+    val profileId: String,
+    val networkId: String,
+    val sessionKey: String,
 )
 
 // ── i18n ──────────────────────────────────────────────────────────────────────
@@ -873,6 +886,10 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
     private var prewarmedWebView: WebView? = null
     private var currentAccountId: String? = null
     private var currentNetworkId: String? = null
+    private var activeSessionIdentity: SessionIdentity? = null
+    private var localStorageScriptHandler: ScriptHandler? = null
+    private var localStorageRestoreActive = false
+    private var localStorageCaptureActive = false
 
     // Back-stack baseline — set after the initial page+redirects settle.
     // canGoBack() returns true for redirect-created entries too, so we only treat
@@ -1094,6 +1111,9 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
     private val cookiePrefs by lazy {
         activity.getSharedPreferences("sfz_cookies", Context.MODE_PRIVATE)
     }
+    private val localStoragePrefs by lazy {
+        activity.getSharedPreferences(LOCAL_STORAGE_PREFS_NAME, Context.MODE_PRIVATE)
+    }
 
     // All base URLs we need to save/restore cookies for
     private val COOKIE_URLS = NETWORKS.map { it.url } + listOf(
@@ -1106,9 +1126,217 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
         "https://accounts.snapchat.com",
     )
 
+    private val knownNetworkIdsByLength = NETWORKS
+        .map { it.id }
+        .sortedByDescending { it.length }
+
+    private fun isKnownNetworkId(networkId: String): Boolean {
+        return knownNetworkIdsByLength.contains(networkId)
+    }
+
+    private fun buildSessionIdentity(profileId: String, networkId: String): SessionIdentity? {
+        val normalizedProfileId = profileId.trim()
+        val normalizedNetworkId = networkId.trim()
+        if (normalizedProfileId.isEmpty() || normalizedNetworkId.isEmpty()) return null
+        if (!isKnownNetworkId(normalizedNetworkId)) return null
+        return SessionIdentity(
+            profileId = normalizedProfileId,
+            networkId = normalizedNetworkId,
+            sessionKey = "$normalizedProfileId-$normalizedNetworkId",
+        )
+    }
+
+    private fun parseSessionIdentity(sessionKey: String, expectedNetworkId: String? = null): SessionIdentity? {
+        val normalizedSessionKey = sessionKey.trim()
+        if (normalizedSessionKey.isEmpty()) return null
+
+        val expected = expectedNetworkId?.trim()?.takeIf { it.isNotEmpty() }
+        if (expected != null) {
+            if (!isKnownNetworkId(expected)) return null
+            val suffix = "-$expected"
+            if (!normalizedSessionKey.endsWith(suffix)) return null
+            val profileId = normalizedSessionKey.removeSuffix(suffix)
+            if (profileId.isEmpty()) return null
+            return SessionIdentity(profileId = profileId, networkId = expected, sessionKey = normalizedSessionKey)
+        }
+
+        for (networkId in knownNetworkIdsByLength) {
+            val suffix = "-$networkId"
+            if (!normalizedSessionKey.endsWith(suffix)) continue
+            val profileId = normalizedSessionKey.removeSuffix(suffix)
+            if (profileId.isEmpty()) continue
+            return SessionIdentity(profileId = profileId, networkId = networkId, sessionKey = normalizedSessionKey)
+        }
+        return null
+    }
+
+    private fun originFromUrl(url: String): String? {
+        return try {
+            val uri = Uri.parse(url)
+            val scheme = uri.scheme?.lowercase() ?: return null
+            val host = uri.host?.lowercase() ?: return null
+            if (scheme != "http" && scheme != "https") return null
+            val isDefaultPort = (scheme == "http" && uri.port == 80) || (scheme == "https" && uri.port == 443)
+            if (uri.port > 0 && !isDefaultPort) "$scheme://$host:${uri.port}" else "$scheme://$host"
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun originFromSourceUri(sourceOrigin: Uri): String? {
+        val raw = sourceOrigin.toString()
+        if (raw == "null") return null
+        return originFromUrl(raw)
+    }
+
+    private fun localStoragePrefKey(sessionKey: String, origin: String): String {
+        return "$sessionKey|$origin"
+    }
+
+    private fun sessionKeyFromPrefKey(key: String): String {
+        return key.substringBefore("|", "")
+    }
+
+    private fun prefKeyBelongsToProfile(key: String, profileId: String): Boolean {
+        val sessionKey = sessionKeyFromPrefKey(key)
+        if (sessionKey.isBlank()) return false
+        return parseSessionIdentity(sessionKey)?.profileId == profileId
+    }
+
+    private fun loadStoredOriginsForSession(sessionKey: String): Set<String> {
+        val prefix = "$sessionKey|"
+        return localStoragePrefs.all.keys
+            .asSequence()
+            .filter { it.startsWith(prefix) }
+            .mapNotNull { key ->
+                val origin = key.removePrefix(prefix).trim()
+                origin.takeIf { it.isNotEmpty() }
+            }
+            .toSet()
+    }
+
+    private fun loadLocalStorageSnapshot(sessionKey: String, origin: String): JSONObject? {
+        val raw = localStoragePrefs.getString(localStoragePrefKey(sessionKey, origin), null) ?: return null
+        return try {
+            JSONObject(raw)
+        } catch (_: Exception) {
+            Log.w(TAG, "Skipped corrupt localStorage snapshot for one origin")
+            null
+        }
+    }
+
+    private fun saveLocalStorageSnapshot(sessionKey: String, origin: String, snapshot: JSONObject) {
+        val encoded = snapshot.toString()
+        if (encoded.length > LOCAL_STORAGE_CAPTURE_MAX_BYTES) {
+            Log.w(TAG, "Skipped oversized localStorage snapshot")
+            return
+        }
+        localStoragePrefs.edit()
+            .putString(localStoragePrefKey(sessionKey, origin), encoded)
+            .apply()
+    }
+
+    private fun removeLocalStorageSnapshotsForSession(sessionKey: String) {
+        val prefix = "$sessionKey|"
+        val keys = localStoragePrefs.all.keys.filter { it.startsWith(prefix) }
+        if (keys.isEmpty()) return
+        val editor = localStoragePrefs.edit()
+        for (key in keys) {
+            editor.remove(key)
+        }
+        editor.apply()
+    }
+
+    private fun removeLocalStorageSnapshotsForProfile(profileId: String) {
+        val keys = localStoragePrefs.all.keys.filter { prefKeyBelongsToProfile(it, profileId) }
+        if (keys.isEmpty()) return
+        val editor = localStoragePrefs.edit()
+        for (key in keys) {
+            editor.remove(key)
+        }
+        editor.apply()
+    }
+
+    private fun buildSessionLocalStoragePayload(sessionKey: String, targetOrigin: String): JSONObject {
+        val payload = JSONObject()
+        val allOrigins = mutableSetOf<String>()
+        allOrigins.add(targetOrigin)
+        for (origin in loadStoredOriginsForSession(sessionKey)) {
+            originFromUrl(origin)?.let { allOrigins.add(it) }
+        }
+        for (origin in allOrigins) {
+            loadLocalStorageSnapshot(sessionKey, origin)?.let { payload.put(origin, it) }
+        }
+        return payload
+    }
+
+    private fun buildLocalStorageDocumentStartScript(sessionKey: String, snapshotsByOrigin: JSONObject): String {
+        val quotedSessionKey = JSONObject.quote(sessionKey)
+        val quotedBridgeName = JSONObject.quote(STORAGE_BRIDGE_OBJECT)
+        val quotedSnapshots = JSONObject.quote(snapshotsByOrigin.toString())
+        return """
+            (function(){
+              if (window.__sfzLocalStorageBridgeSession === $quotedSessionKey) return;
+              window.__sfzLocalStorageBridgeSession = $quotedSessionKey;
+              var snapshotsByOrigin = {};
+              try {
+                snapshotsByOrigin = JSON.parse($quotedSnapshots) || {};
+              } catch (e) {
+                snapshotsByOrigin = {};
+              }
+              var origin = location.origin || '';
+              var snapshot = snapshotsByOrigin[origin];
+              try {
+                localStorage.clear();
+                if (snapshot && typeof snapshot === 'object') {
+                  Object.keys(snapshot).forEach(function(key) {
+                    var value = snapshot[key];
+                    if (value === null || value === undefined) return;
+                    localStorage.setItem(key, String(value));
+                  });
+                }
+              } catch (e) {}
+              var bridgeName = $quotedBridgeName;
+              var bridge = window[bridgeName];
+              if (!bridge || typeof bridge.postMessage !== 'function') return;
+              var sendSnapshot = function(reason) {
+                try {
+                  var data = {};
+                  for (var i = 0; i < localStorage.length; i++) {
+                    var key = localStorage.key(i);
+                    if (key === null) continue;
+                    data[key] = localStorage.getItem(key);
+                  }
+                  bridge.postMessage(JSON.stringify({
+                    type: 'localStorageSnapshot',
+                    sessionKey: $quotedSessionKey,
+                    origin: location.origin || '',
+                    reason: reason || 'change',
+                    data: data
+                  }));
+                } catch (e) {}
+              };
+              if (!window.__sfzLocalStoragePatched) {
+                window.__sfzLocalStoragePatched = true;
+                ['setItem','removeItem','clear'].forEach(function(methodName) {
+                  try {
+                    var original = localStorage[methodName];
+                    if (typeof original !== 'function') return;
+                    localStorage[methodName] = function() {
+                      var result = original.apply(localStorage, arguments);
+                      sendSnapshot(methodName);
+                      return result;
+                    };
+                  } catch (e) {}
+                });
+              }
+              sendSnapshot('init');
+            })();
+        """.trimIndent()
+    }
+
     /** Save all cookies for the current profile session key. */
     private fun saveCookiesForSession(sessionKey: String) {
-        dbg("── SAVE cookies for: $sessionKey ──")
         val cm = CookieManager.getInstance()
         val editor = cookiePrefs.edit()
         var totalSaved = 0
@@ -1117,21 +1345,13 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
             if (cookies != null) {
                 val names = cookies.split(";").map { it.trim().substringBefore("=") }
                 editor.putString("$sessionKey|$url", cookies)
-                // Detailed log for Snapchat domains
-                if (url.contains("snapchat")) {
-                    dbg("  SAVE $url → ${names.size} cookies: ${names.joinToString(", ")}")
-                    dbg("  RAW: ${cookies.take(300)}")
-                }
                 totalSaved += names.size
             } else {
                 editor.remove("$sessionKey|$url")
-                if (url.contains("snapchat")) {
-                    dbg("  SAVE $url → null (no cookies)")
-                }
             }
         }
         editor.apply()
-        dbg("── SAVE done: $totalSaved total cookies saved ──")
+        dbg("cookies saved for session (${totalSaved} entries)")
     }
 
     /** Clear all cookies, then restore saved cookies for the target session. */
@@ -1145,54 +1365,184 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
         return if (parts.size >= 2) ".${parts.takeLast(2).joinToString(".")}" else null
     }
 
-    private fun restoreCookiesForSession(sessionKey: String) {
-        dbg("── RESTORE cookies for: $sessionKey ──")
+    private fun restoreCookiesForSession(sessionKey: String, onComplete: (Boolean) -> Unit) {
         val cm = CookieManager.getInstance()
-        dbg("  removeAllCookies → starting async clear...")
-        // removeAllCookies is ASYNC — restore only after it completes,
-        // otherwise the pending removal can wipe freshly-restored cookies.
-        cm.removeAllCookies { cleared ->
-            dbg("  removeAllCookies callback → cleared=$cleared")
-            var restoredUrls = 0
-            var restoredCookies = 0
-            for (url in COOKIE_URLS) {
-                val cookies = cookiePrefs.getString("$sessionKey|$url", null) ?: continue
-                val domain = baseDomainOf(url)
-                val parts = cookies.split(";")
-                // setCookie expects one cookie at a time; the stored string may have multiple
-                for (cookie in parts) {
-                    val trimmed = cookie.trim()
-                    if (trimmed.isNotEmpty()) {
-                        // __Host- cookies MUST NOT have a Domain attribute (RFC 6265bis).
-                        // Setting Domain= on them causes silent rejection by the browser.
-                        val name = trimmed.substringBefore("=")
-                        val cookieWithAttrs = if (name.startsWith("__Host-")) {
-                            "$trimmed; Path=/; Secure"
-                        } else if (domain != null) {
-                            "$trimmed; Domain=$domain; Path=/; Secure"
-                        } else {
-                            trimmed
-                        }
-                        cm.setCookie(url, cookieWithAttrs)
-                        restoredCookies++
-                    }
-                }
-                // Detailed log for Snapchat domains
-                if (url.contains("snapchat")) {
-                    val names = parts.map { it.trim().substringBefore("=") }
-                    dbg("  RESTORE $url (domain=$domain) → ${names.size} cookies: ${names.joinToString(", ")}")
-                }
-                restoredUrls++
+        var done = false
+        fun finish(ok: Boolean) {
+            if (done) return
+            done = true
+            onComplete(ok)
+        }
+
+        activity.window.decorView.postDelayed({
+            if (!done) {
+                Log.w(TAG, "Session isolation degraded: cookie restore callback timeout")
+                finish(false)
             }
-            cm.flush()
-            dbg("── RESTORE done: $restoredCookies cookies across $restoredUrls URLs ──")
-            // Verify: read back Snapchat cookies to confirm they're set
-            val snapVerify = cm.getCookie("https://www.snapchat.com")
-            val snapAccVerify = cm.getCookie("https://accounts.snapchat.com")
-            val snapNames = snapVerify?.split(";")?.map { it.trim().substringBefore("=") }
-            val snapAccNames = snapAccVerify?.split(";")?.map { it.trim().substringBefore("=") }
-            dbg("  VERIFY www.snapchat.com → ${snapNames?.size ?: 0} cookies: ${snapNames?.joinToString(", ") ?: "null"}")
-            dbg("  VERIFY accounts.snapchat.com → ${snapAccNames?.size ?: 0} cookies: ${snapAccNames?.joinToString(", ") ?: "null"}")
+        }, 4000)
+
+        try {
+            cm.removeAllCookies {
+                try {
+                    var restoredCookies = 0
+                    for (url in COOKIE_URLS) {
+                        val cookies = cookiePrefs.getString("$sessionKey|$url", null) ?: continue
+                        val domain = baseDomainOf(url)
+                        val parts = cookies.split(";")
+                        // setCookie expects one cookie at a time; the stored string may have multiple
+                        for (cookie in parts) {
+                            val trimmed = cookie.trim()
+                            if (trimmed.isNotEmpty()) {
+                                // __Host- cookies MUST NOT have a Domain attribute (RFC 6265bis).
+                                // Setting Domain= on them causes silent rejection by the browser.
+                                val name = trimmed.substringBefore("=")
+                                val cookieWithAttrs = if (name.startsWith("__Host-")) {
+                                    "$trimmed; Path=/; Secure"
+                                } else if (domain != null) {
+                                    "$trimmed; Domain=$domain; Path=/; Secure"
+                                } else {
+                                    trimmed
+                                }
+                                cm.setCookie(url, cookieWithAttrs)
+                                restoredCookies++
+                            }
+                        }
+                    }
+                    cm.flush()
+                    dbg("cookies restored for session (${restoredCookies} entries)")
+                    finish(true)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Session isolation degraded: cookie restore error", e)
+                    finish(false)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Session isolation degraded: cookie restore setup error", e)
+            finish(false)
+        }
+    }
+
+    private fun resetStorageIsolationHooks(webView: WebView) {
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            try {
+                localStorageScriptHandler?.remove()
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not remove previous localStorage restore script", e)
+            }
+        }
+        localStorageScriptHandler = null
+
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            try {
+                WebViewCompat.removeWebMessageListener(webView, STORAGE_BRIDGE_OBJECT)
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not remove previous localStorage listener", e)
+            }
+        }
+        localStorageRestoreActive = false
+        localStorageCaptureActive = false
+    }
+
+    private fun onLocalStorageBridgeMessage(
+        messageJson: String?,
+        sourceOrigin: Uri,
+        isMainFrame: Boolean,
+    ) {
+        if (!isMainFrame || messageJson.isNullOrBlank()) return
+        val activeSession = activeSessionIdentity ?: return
+
+        val payload = try {
+            JSONObject(messageJson)
+        } catch (_: Exception) {
+            Log.w(TAG, "Ignored invalid localStorage bridge payload")
+            return
+        }
+
+        if (payload.optString("type") != "localStorageSnapshot") return
+
+        val payloadSessionKey = payload.optString("sessionKey", "")
+        if (payloadSessionKey != activeSession.sessionKey) {
+            Log.w(TAG, "Ignored localStorage bridge message for inactive session")
+            return
+        }
+
+        val payloadOrigin = originFromUrl(payload.optString("origin", ""))
+        val source = originFromSourceUri(sourceOrigin)
+        if (payloadOrigin == null || source == null || payloadOrigin != source) {
+            Log.w(TAG, "Ignored localStorage bridge message with invalid origin")
+            return
+        }
+
+        val storageData = payload.optJSONObject("data") ?: JSONObject()
+        saveLocalStorageSnapshot(activeSession.sessionKey, payloadOrigin, storageData)
+    }
+
+    private fun configureStorageIsolationForNavigation(
+        webView: WebView,
+        session: SessionIdentity,
+        targetUrl: String,
+    ) {
+        val targetOrigin = originFromUrl(targetUrl)
+        resetStorageIsolationHooks(webView)
+
+        if (targetOrigin == null) {
+            Log.w(TAG, "Session isolation degraded: target origin unavailable")
+            return
+        }
+
+        val allowedOrigins = mutableSetOf<String>()
+        allowedOrigins.add(targetOrigin)
+        for (origin in loadStoredOriginsForSession(session.sessionKey)) {
+            originFromUrl(origin)?.let { allowedOrigins.add(it) }
+        }
+
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            try {
+                WebViewCompat.addWebMessageListener(
+                    webView,
+                    STORAGE_BRIDGE_OBJECT,
+                    allowedOrigins
+                ) { _, message, sourceOrigin, isMainFrame, _ ->
+                    onLocalStorageBridgeMessage(message.data, sourceOrigin, isMainFrame)
+                }
+                localStorageCaptureActive = true
+            } catch (e: Exception) {
+                Log.w(TAG, "Session isolation degraded: localStorage capture unavailable", e)
+            }
+        } else {
+            Log.w(TAG, "Session isolation degraded: WEB_MESSAGE_LISTENER unsupported")
+        }
+
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            try {
+                val snapshotsByOrigin = buildSessionLocalStoragePayload(session.sessionKey, targetOrigin)
+                localStorageScriptHandler = WebViewCompat.addDocumentStartJavaScript(
+                    webView,
+                    buildLocalStorageDocumentStartScript(session.sessionKey, snapshotsByOrigin),
+                    allowedOrigins
+                )
+                localStorageRestoreActive = true
+            } catch (e: Exception) {
+                Log.w(TAG, "Session isolation degraded: localStorage restore unavailable", e)
+            }
+        } else {
+            Log.w(TAG, "Session isolation degraded: DOCUMENT_START_SCRIPT unsupported")
+        }
+    }
+
+    private fun prepareSessionBeforeLoad(
+        webView: WebView,
+        session: SessionIdentity,
+        targetUrl: String,
+        onReady: (Boolean) -> Unit,
+    ) {
+        activeSessionIdentity = session
+        restoreCookiesForSession(session.sessionKey) { cookiesRestored ->
+            if (!cookiesRestored) {
+                Log.w(TAG, "Session isolation degraded: cookie restore did not complete cleanly")
+            }
+            configureStorageIsolationForNavigation(webView, session, targetUrl)
+            onReady(cookiesRestored)
         }
     }
 
@@ -1806,32 +2156,48 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
     @Command
     fun openWebView(invoke: Invoke) {
         val args = invoke.parseArgs(OpenWebViewArgs::class.java)
-        incrementUsage(args.networkId)
-        dbg("▶ OPEN webview: network=${args.networkId} account=${args.accountId} url=${args.url}")
+        val session = parseSessionIdentity(args.accountId, args.networkId)
+        if (session == null) {
+            invoke.reject("Invalid Android session key")
+            return
+        }
+
+        incrementUsage(session.networkId)
+        dbg("▶ OPEN webview: network=${session.networkId} url=${args.url}")
 
         activity.runOnUiThread {
-            if (args.networkId != "facebook") {
+            if (session.networkId != "facebook") {
                 facebookStoryNoticeShown = false
             }
             if (socialWebView != null) {
                 dbg("  reuse existing webview (switch)")
                 // Save cookies for the old session before switching
                 currentAccountId?.let { saveCookiesForSession(it) }
-                // Restore cookies for the new session
-                restoreCookiesForSession(args.accountId)
-                // Reuse existing webview — just navigate and update active highlight
-                initialBackIndex = -1  // Reset baseline for new network URL
-                isLoggedIn = false; pagesSinceOpen = 0  // Re-check auth on new network
-                if (args.networkId == "facebook") {
-                    facebookDesktopOverride = isFacebookDesktopFlow(args.url)
+
+                val webView = socialWebView
+                if (webView == null) {
+                    invoke.reject("Android WebView unavailable")
+                    return@runOnUiThread
                 }
-                applyUaForNetwork(args.networkId, args.url)
-                socialWebView?.loadUrl(args.url)
-                currentAccountId = args.accountId
-                currentNetworkId = args.networkId
-                updateBottomBarActiveNetwork(args.networkId)
-                showSocialView()
-                invoke.resolve(JSObject())
+
+                prepareSessionBeforeLoad(webView, session, args.url) { cookiesRestored ->
+                    initialBackIndex = -1  // Reset baseline for new network URL
+                    isLoggedIn = false; pagesSinceOpen = 0  // Re-check auth on new network
+                    if (session.networkId == "facebook") {
+                        facebookDesktopOverride = isFacebookDesktopFlow(args.url)
+                    }
+                    applyUaForNetwork(session.networkId, args.url)
+                    webView.loadUrl(args.url)
+                    currentAccountId = session.sessionKey
+                    currentNetworkId = session.networkId
+                    updateBottomBarActiveNetwork(session.networkId)
+                    showSocialView()
+                    val result = JSObject()
+                    result.put("cookiesRestored", cookiesRestored)
+                    result.put("localStorageRestoreActive", localStorageRestoreActive)
+                    result.put("localStorageCaptureActive", localStorageCaptureActive)
+                    invoke.resolve(result)
+                }
                 return@runOnUiThread
             }
 
@@ -1871,7 +2237,7 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
             }
 
             // ── Bottom overlay bar (above nav bar) ───────────────────────────
-            val bottomBar = buildBottomBar(density, navBarHeight, args.networkId, sortedNetworks())
+            val bottomBar = buildBottomBar(density, navBarHeight, session.networkId, sortedNetworks())
             bottomBarView = bottomBar
             val bottomBarParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -1893,27 +2259,32 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
 
             socialRoot = root
             socialWebView = webView
-            currentAccountId = args.accountId
-            currentNetworkId = args.networkId
+            currentAccountId = session.sessionKey
+            currentNetworkId = session.networkId
 
             // Intercept the Android hardware back button while the social webview is visible.
             // Priority: go back in webview history → if no history, signal Vue to close overlay.
             registerBackCallback()
 
-            // Restore cookies for this profile session before loading
-            restoreCookiesForSession(args.accountId)
             isLoggedIn = false; pagesSinceOpen = 0  // Re-check auth on new network
 
             // Apply persisted mute state to the new webview via JS
             applyMuteToWebView(webView)
 
-            if (args.networkId == "facebook") {
+            if (session.networkId == "facebook") {
                 facebookDesktopOverride = isFacebookDesktopFlow(args.url)
                 facebookStoryNoticeShown = false
             }
-            applyUaForNetwork(args.networkId, args.url)
-            webView.loadUrl(args.url)
-            invoke.resolve(JSObject())
+
+            prepareSessionBeforeLoad(webView, session, args.url) { cookiesRestored ->
+                applyUaForNetwork(session.networkId, args.url)
+                webView.loadUrl(args.url)
+                val result = JSObject()
+                result.put("cookiesRestored", cookiesRestored)
+                result.put("localStorageRestoreActive", localStorageRestoreActive)
+                result.put("localStorageCaptureActive", localStorageCaptureActive)
+                invoke.resolve(result)
+            }
         }
     }
 
@@ -2119,8 +2490,16 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
                 }
             }
 
+            val localStorage = org.json.JSONObject()
+            for ((key, value) in localStoragePrefs.all) {
+                if (value is String) {
+                    localStorage.put(key, value)
+                }
+            }
+
             val result = JSObject()
             result.put("cookiesJson", cookies.toString())
+            result.put("localStorageJson", localStorage.toString())
             invoke.resolve(result)
         } catch (e: Exception) {
             invoke.reject("Cookie export failed: ${e.message}")
@@ -2131,8 +2510,8 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
     fun importCookiesFromBackup(invoke: Invoke) {
         val args = invoke.parseArgs(ImportCookiesBackupArgs::class.java)
         try {
-            val editor = cookiePrefs.edit()
-            editor.clear()
+            val cookieEditor = cookiePrefs.edit()
+            cookieEditor.clear()
 
             val json = args.cookiesJson.trim()
             if (json.isNotEmpty()) {
@@ -2140,10 +2519,31 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
                 val keys = cookies.keys()
                 while (keys.hasNext()) {
                     val key = keys.next()
-                    editor.putString(key, cookies.optString(key, ""))
+                    cookieEditor.putString(key, cookies.optString(key, ""))
                 }
             }
-            editor.apply()
+            cookieEditor.apply()
+
+            val localStorageEditor = localStoragePrefs.edit()
+            localStorageEditor.clear()
+
+            val localStorageJson = args.localStorageJson.trim()
+            if (localStorageJson.isNotEmpty()) {
+                val snapshots = org.json.JSONObject(localStorageJson)
+                val keys = snapshots.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val snapshotRaw = snapshots.optString(key, "")
+                    if (snapshotRaw.isBlank()) continue
+                    try {
+                        JSONObject(snapshotRaw)
+                        localStorageEditor.putString(key, snapshotRaw)
+                    } catch (_: Exception) {
+                        Log.w(TAG, "Skipped corrupt localStorage snapshot during import")
+                    }
+                }
+            }
+            localStorageEditor.apply()
 
             val cm = CookieManager.getInstance()
             cm.removeAllCookies(null)
@@ -2198,33 +2598,51 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
     @Command
     fun deleteNetworkSession(invoke: Invoke) {
         val args = invoke.parseArgs(DeleteSessionArgs::class.java)
-        val sessionKey = "${args.profileId}-${args.networkId}"
+        val session = buildSessionIdentity(args.profileId, args.networkId)
+        if (session == null) {
+            invoke.reject("Invalid Android session key")
+            return
+        }
+        val sessionKey = session.sessionKey
         val editor = cookiePrefs.edit()
         for (url in COOKIE_URLS) {
             editor.remove("$sessionKey|$url")
         }
         editor.apply()
+        removeLocalStorageSnapshotsForSession(sessionKey)
         // Re-arm cookie consent if deleting the currently active session
-        if (currentAccountId == sessionKey) { isLoggedIn = false; pagesSinceOpen = 0 }
-        Log.i(TAG, "Cookies deleted for session: $sessionKey")
+        if (currentAccountId == sessionKey) {
+            isLoggedIn = false
+            pagesSinceOpen = 0
+        }
+        Log.i(TAG, "Session data deleted for one profile/network pair")
         invoke.resolve(JSObject())
     }
 
     @Command
     fun deleteProfileSession(invoke: Invoke) {
         val args = invoke.parseArgs(DeleteSessionArgs::class.java)
+        val profileId = args.profileId.trim()
+        if (profileId.isEmpty()) {
+            invoke.reject("Profile ID is required")
+            return
+        }
         val editor = cookiePrefs.edit()
         // Remove cookies for all networks under this profile
         val allPrefs = cookiePrefs.all
         for (key in allPrefs.keys) {
-            if (key.startsWith("${args.profileId}-")) {
+            if (prefKeyBelongsToProfile(key, profileId)) {
                 editor.remove(key)
             }
         }
         editor.apply()
+        removeLocalStorageSnapshotsForProfile(profileId)
         // Re-arm cookie consent if deleting the currently active profile
-        if (currentAccountId?.startsWith("${args.profileId}-") == true) { isLoggedIn = false; pagesSinceOpen = 0 }
-        Log.i(TAG, "All cookies deleted for profile: ${args.profileId}")
+        if (currentAccountId?.let { parseSessionIdentity(it)?.profileId == profileId } == true) {
+            isLoggedIn = false
+            pagesSinceOpen = 0
+        }
+        Log.i(TAG, "Session data deleted for profile")
         invoke.resolve(JSObject())
     }
 
@@ -3100,27 +3518,39 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
             dismissPopupMenu()
             if (net.id != currentNetworkId) {
                 dbg("⇄ SWITCH ${currentNetworkId} → ${net.id}")
-                // Save cookies for old network, restore for new (same profile)
-                currentAccountId?.let { oldKey ->
-                    dbg("  oldKey=$oldKey")
-                    saveCookiesForSession(oldKey)
-                    val profilePrefix = oldKey.substringBeforeLast("-")
-                    val newKey = "$profilePrefix-${net.id}"
-                    dbg("  newKey=$newKey")
-                    restoreCookiesForSession(newKey)
-                    currentAccountId = newKey
+                val webView = socialWebView ?: return@setOnClickListener
+                val oldKey = currentAccountId
+                if (oldKey.isNullOrBlank()) {
+                    Log.w(TAG, "Blocked network switch: active session unavailable")
+                    return@setOnClickListener
                 }
-                initialBackIndex = -1
-                isLoggedIn = false; pagesSinceOpen = 0
-                if (net.id == "facebook") {
-                    facebookDesktopOverride = false
+
+                saveCookiesForSession(oldKey)
+                val oldSession = parseSessionIdentity(oldKey, currentNetworkId)
+                if (oldSession == null) {
+                    Log.w(TAG, "Blocked network switch: could not resolve active session")
+                    return@setOnClickListener
                 }
-                applyUaForNetwork(net.id, net.url)
-                dbg("  loadUrl: ${net.url}")
-                socialWebView?.loadUrl(net.url)
-                currentNetworkId = net.id
-                incrementUsage(net.id)
-                updateBottomBarActiveNetwork(net.id)
+                val newSession = buildSessionIdentity(oldSession.profileId, net.id)
+                if (newSession == null) {
+                    Log.w(TAG, "Blocked network switch: invalid target session")
+                    return@setOnClickListener
+                }
+
+                prepareSessionBeforeLoad(webView, newSession, net.url) { _ ->
+                    initialBackIndex = -1
+                    isLoggedIn = false; pagesSinceOpen = 0
+                    if (net.id == "facebook") {
+                        facebookDesktopOverride = false
+                    }
+                    applyUaForNetwork(net.id, net.url)
+                    dbg("  loadUrl: ${net.url}")
+                    webView.loadUrl(net.url)
+                    currentAccountId = newSession.sessionKey
+                    currentNetworkId = net.id
+                    incrementUsage(net.id)
+                    updateBottomBarActiveNetwork(net.id)
+                }
             }
         }
 
@@ -3234,23 +3664,36 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
             dismissPopupMenu()
             if (net.id != currentNetworkId) {
                 dbg("⇄ SWITCH ${currentNetworkId} → ${net.id} (threads btn)")
-                currentAccountId?.let { oldKey ->
-                    dbg("  oldKey=$oldKey")
-                    saveCookiesForSession(oldKey)
-                    val profilePrefix = oldKey.substringBeforeLast("-")
-                    val newKey = "$profilePrefix-${net.id}"
-                    dbg("  newKey=$newKey")
-                    restoreCookiesForSession(newKey)
-                    currentAccountId = newKey
+                val webView = socialWebView ?: return@setOnClickListener
+                val oldKey = currentAccountId
+                if (oldKey.isNullOrBlank()) {
+                    Log.w(TAG, "Blocked network switch: active session unavailable")
+                    return@setOnClickListener
                 }
-                initialBackIndex = -1
-                isLoggedIn = false; pagesSinceOpen = 0
-                applyUaForNetwork(net.id)
-                dbg("  loadUrl: ${net.url}")
-                socialWebView?.loadUrl(net.url)
-                currentNetworkId = net.id
-                incrementUsage(net.id)
-                updateBottomBarActiveNetwork(net.id)
+
+                saveCookiesForSession(oldKey)
+                val oldSession = parseSessionIdentity(oldKey, currentNetworkId)
+                if (oldSession == null) {
+                    Log.w(TAG, "Blocked network switch: could not resolve active session")
+                    return@setOnClickListener
+                }
+                val newSession = buildSessionIdentity(oldSession.profileId, net.id)
+                if (newSession == null) {
+                    Log.w(TAG, "Blocked network switch: invalid target session")
+                    return@setOnClickListener
+                }
+
+                prepareSessionBeforeLoad(webView, newSession, net.url) { _ ->
+                    initialBackIndex = -1
+                    isLoggedIn = false; pagesSinceOpen = 0
+                    applyUaForNetwork(net.id, net.url)
+                    dbg("  loadUrl: ${net.url}")
+                    webView.loadUrl(net.url)
+                    currentAccountId = newSession.sessionKey
+                    currentNetworkId = net.id
+                    incrementUsage(net.id)
+                    updateBottomBarActiveNetwork(net.id)
+                }
             }
         }
 
@@ -3645,12 +4088,19 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
         dismissPopupMenu()
         backCallback?.remove()
         backCallback = null
-        socialWebView?.destroy()
+        socialWebView?.let { webView ->
+            resetStorageIsolationHooks(webView)
+            webView.destroy()
+        }
         socialRoot?.let { (it.parent as? ViewGroup)?.removeView(it) }
         socialWebView = null
         socialRoot = null
         bottomBarView = null
         currentAccountId = null
         currentNetworkId = null
+        activeSessionIdentity = null
+        localStorageScriptHandler = null
+        localStorageRestoreActive = false
+        localStorageCaptureActive = false
     }
 }
