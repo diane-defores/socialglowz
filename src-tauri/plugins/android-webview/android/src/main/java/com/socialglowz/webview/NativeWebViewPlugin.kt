@@ -184,6 +184,7 @@ private val NETWORKS = listOf(
     NetworkInfo("discord",   "\ue9c0", Color.parseColor("#5865F2"), "https://discord.com/app"),
     NetworkInfo("reddit",    "\ue9e8", Color.parseColor("#FF4500"), "https://reddit.com"),
     NetworkInfo("snapchat",  "\ue96c", Color.parseColor("#FFFC00"), "https://www.snapchat.com/web/"),
+    NetworkInfo("cinderreels", "\ue96c", Color.parseColor("#E11D48"), "https://cinderreels.com/"),
     NetworkInfo("quora",     "\ue959", Color.parseColor("#A82400"), "https://www.quora.com"),
     NetworkInfo("pinterest", "\uea09", Color.parseColor("#E60023"), "https://www.pinterest.com"),
     // NetworkInfo("whatsapp",  "\ue9d0", Color.parseColor("#25D366"), "https://web.whatsapp.com"), // disabled 2026-04-12 — see docs/whatsapp-web-integration.md

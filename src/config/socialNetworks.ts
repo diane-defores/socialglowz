@@ -108,6 +108,17 @@ export const builtInSocialNetworks: BuiltInSocialNetwork[] = [
     defaultSelected: false,
   },
   {
+    id: 'cinderreels',
+    label: 'CinderReels',
+    route: '/cinderreels',
+    url: 'https://cinderreels.com/',
+    icon: 'pi pi-camera',
+    color: '#E11D48',
+    tileColor: '#E11D48',
+    onboarding: true,
+    defaultSelected: false,
+  },
+  {
     id: 'quora',
     label: 'Quora',
     route: '/quora',
