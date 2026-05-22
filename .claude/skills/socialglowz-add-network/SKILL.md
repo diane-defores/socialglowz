@@ -1,14 +1,14 @@
 ---
-name: socialflow-add-network
-description: Add or audit a built-in SocialFlow webview network using the project-local network catalog, with checks for UI, native Android follow-ups, sessions, cookies, and validation.
+name: socialglowz-add-network
+description: Add or audit a built-in SocialGlowz webview network using the project-local network catalog, with checks for UI, native Android follow-ups, sessions, cookies, and validation.
 argument-hint: <network name, url, optional notes>
 ---
 
-# SocialFlow Add Network
+# SocialGlowz Add Network
 
 Use this project-local skill when adding, reviewing, or planning a built-in webview network in this repository.
 
-This skill is intentionally local to SocialFlow. Do not use it for generic social-network research or for unrelated projects.
+This skill is intentionally local to SocialGlowz. Do not use it for generic social-network research or for unrelated projects.
 
 ## Core Rule
 
@@ -51,10 +51,10 @@ Ask one concise question before editing if any of these are unclear:
 3. Preserve the desired display order in `builtInSocialNetworks`.
 4. Confirm these surfaces still derive from the catalog:
    - `src/stores/webviewState.ts`
-   - `src/ui/setup/pages/SocialFlow/components/AppSidebar.vue`
-   - `src/ui/setup/pages/SocialFlow/components/MobileLayout.vue`
-   - `src/ui/setup/pages/SocialFlow/components/MobileProfileSheet.vue`
-   - `src/ui/setup/pages/SocialFlow/components/OnboardingFlow.vue`
+   - `src/ui/setup/pages/SocialGlowz/components/AppSidebar.vue`
+   - `src/ui/setup/pages/SocialGlowz/components/MobileLayout.vue`
+   - `src/ui/setup/pages/SocialGlowz/components/MobileProfileSheet.vue`
+   - `src/ui/setup/pages/SocialGlowz/components/OnboardingFlow.vue`
 
 Keep Kanban and custom links outside the built-in catalog.
 
@@ -62,7 +62,7 @@ Keep Kanban and custom links outside the built-in catalog.
 
 For every new built-in webview network, inspect:
 
-- `src-tauri/plugins/android-webview/android/src/main/java/com/socialflow/webview/NativeWebViewPlugin.kt`
+- `src-tauri/plugins/android-webview/android/src/main/java/com/socialglowz/webview/NativeWebViewPlugin.kt`
 
 Decide whether to update:
 
@@ -79,7 +79,7 @@ If Android support is intentionally deferred, record that as a residual risk in 
 
 Consider whether to update:
 
-- `src/ui/setup/pages/SocialFlow/index.html` DNS prefetch entries
+- `src/ui/setup/pages/SocialGlowz/index.html` DNS prefetch entries
 - `AGENT.md` only if the workflow or source of truth changes
 - `TASKS.md` only if the user asks to track the work
 
