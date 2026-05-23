@@ -1,17 +1,18 @@
 ---
 artifact: spec
 metadata_schema_version: "1.0"
-artifact_version: "0.3.3"
+artifact_version: "1.0.1"
 project: "socialglowz"
 created: "2026-05-22"
 created_at: "2026-05-22 15:55:00 UTC"
 updated: "2026-05-23"
-updated_at: "2026-05-23 17:01:00 UTC"
+updated_at: "2026-05-23 18:43:53 UTC"
 status: ready
 source_skill: sf-spec
 source_model: "gpt-5.5"
 scope: security-hardening
 owner: "Diane"
+confidence: high
 user_story: "En tant qu'utilisateur SocialGlowz Android avec plusieurs profils, je veux que les sessions WebView d'un réseau comme CinderReels soient isolées par profil, afin d'éviter toute fuite d'authentification entre profils."
 risk_level: high
 security_impact: yes
@@ -321,6 +322,10 @@ None.
 | 2026-05-22 21:12:00 UTC | sf-build | GPT-5 Codex | Extended implementation with declarative per-network isolation matrix (`storageOrigins`) from TS config to Rust/Kotlin, including Android validation/allowlist forwarding, bottom bar propagation, and focused Vitest coverage. | partial | Rust system deps, Android generated-project build, and device QA still required before close/ship. |
 | 2026-05-23 16:59:00 UTC | sf-test | GPT-5 Codex | Logged user-reported Android APK manual QA PASS for CinderReels A/B/A session isolation. | pass | /sf-ship end |
 | 2026-05-23 17:01:00 UTC | sf-ship | GPT-5 Codex | Full close + ship after user-reported Android APK QA pass; documented GitHub Actions / Blacksmith Android validation mode and updated closeout artifacts. | shipped | None. |
+| 2026-05-23 17:05:00 UTC | sf-repurpose | GPT-5 Codex | Routed the Android WebView storage isolation explanation into future technophile user/developer docs. | handoff | /sf-docs add Android WebView session isolation explainer to README and technical docs. |
+| 2026-05-23 17:09:00 UTC | sf-redact | gpt-5.5 medium | Created a technophile FAQ draft for Android WebView session isolation. | draft | Decide whether the draft stays contributor-only or becomes public FAQ content. |
+| 2026-05-23 17:10:00 UTC | sf-docs | gpt-5.5 medium | Added README summary, technical context link, mobile QA notes, and a dedicated Android WebView session isolation explainer. | documented | Review and ship docs when approved. |
+| 2026-05-23 18:43:53 UTC | sf-content | GPT-5 Codex | Promoted the technophile draft into a public Astro blog article and updated the editorial content map. | implemented | Content build and metadata validation passed; run ship when the wider docs/content scope is ready. |
 
 ## Current Chantier Flow
 

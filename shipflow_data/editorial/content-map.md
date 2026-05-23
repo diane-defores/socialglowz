@@ -1,10 +1,10 @@
 ---
 artifact: content_map
 metadata_schema_version: "1.0"
-artifact_version: "1.0.1"
+artifact_version: "1.1.0"
 project: "socialglowz"
 created: "2026-04-26"
-updated: "2026-05-11"
+updated: "2026-05-23"
 status: reviewed
 source_skill: manual
 scope: content_map
@@ -16,6 +16,7 @@ docs_impact: yes
 evidence:
   - "README.md and shipflow_data/workflow/TASKS.md serve as the public and execution surfaces."
   - "en/ and fr/ landing pages expose public product positioning."
+  - "site/src/content/blog and site/src/pages/blog expose public article content."
   - "src/ui and src-tauri represent operational and desktop surfaces."
   - "shipflow_data/workflow/research and shipflow_data/workflow/specs contain exploration and implementation context."
 linked_artifacts:
@@ -34,6 +35,7 @@ next_step: "/sf-docs audit shipflow_data/editorial/content-map.md"
 content_surfaces:
   - repo_docs
   - landing_pages
+  - blog_articles
   - static_pages
   - architecture_docs
   - specs
@@ -61,6 +63,7 @@ content_surfaces:
 - `src/ui/setup/pages/SocialGlowz/` — primary application surface.
 - `src-tauri/` — desktop and packaging surface.
 - `en/` and `fr/` — public landing/content pages.
+- `site/src/content/blog/` with `site/src/pages/blog/` — public blog/article surface using the Astro content schema in `site/src/content.config.ts`.
 - `404.html` and extension-specific root index as distribution entry docs.
 
 ### Technical and discovery surfaces
@@ -81,5 +84,6 @@ content_surfaces:
 ## Repurposing Outputs
 
 - For public-facing positioning content, target `/en` and `/fr` landing structures first, then keep links back to `README.md`.
+- For public blog/article content, target `site/src/content/blog/` and respect the schema in `site/src/content.config.ts`.
 - For technical summaries and workflow explanations, target `README.md` and `shipflow_data/workflow/TASKS.md`.
 - For product truth updates, update linked artifact files in tandem (`shipflow_data/business/product.md`, `shipflow_data/business/gtm.md`) before publication-facing copy changes.

@@ -32,6 +32,20 @@ If your code runs on a remote Linux server and your phone is not directly connec
 
 This avoids local Android Studio/SDK setup on your server machine.
 
+## Android WebView session QA
+
+For Android session-isolation checks, use the APK built by GitHub Actions on Blacksmith:
+
+1. Push your branch to GitHub.
+2. Run the workflow `Dev Builds (Android + Windows)` if it did not start from the push.
+3. Download the artifact `socialglowz-android-debug`.
+4. Install the APK on the Android phone.
+5. Validate that embedded networks keep cookies and localStorage snapshots separated by `${profileId}-${networkId}`.
+
+CinderReels is the reference manual test because its authentication uses localStorage. A valid test switches Profile A -> Profile B -> Profile A and confirms each profile returns to its own CinderReels account without showing the other profile's state.
+
+Known limits for this Android WebView isolation: IndexedDB, CacheStorage, service workers, global WebView HTTP cache and system credential stores are not covered.
+
 ## Windows desktop test workflow
 
 To test on Windows without building locally:

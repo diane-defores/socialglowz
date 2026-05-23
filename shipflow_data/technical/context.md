@@ -1,10 +1,10 @@
 ---
 artifact: documentation
 metadata_schema_version: "1.0"
-artifact_version: "1.0.0"
+artifact_version: "1.1.0"
 project: "socialglowz"
 created: "2026-04-26"
-updated: "2026-05-22"
+updated: "2026-05-23"
 status: reviewed
 source_skill: sf-docs
 scope: context
@@ -34,6 +34,7 @@ linked_systems:
   - "README.md"
   - "AGENT.md"
   - "shipflow_data/technical/context-function-tree.md"
+  - "shipflow_data/technical/android-webview-session-isolation.md"
   - "shipflow_data/technical/architecture.md"
   - "package.json"
   - "vite.config.ts"
@@ -105,9 +106,11 @@ SocialGlowz est une application social multi-canaux avec une base Vue 3 commune 
 - État local : Pinia + localStorage via stores.
 - Sync cloud : `src/lib/cloudSyncQueue.ts`, `src/lib/cloudSettings.ts`, `src/lib/cloudSync.ts`.
 - Backend : tables Convex (`users`, `socialAccounts`, `activeAccounts`, `settings`, `profiles`, `customLinks`, `friendsFilters`, `subscriptions`).
-- Android WebView (plugin natif) : cookies + snapshots `localStorage` persistés par session `${profileId}-${networkId}` et par origin, avec mode dégradé explicite si `DOCUMENT_START_SCRIPT` ou `WEB_MESSAGE_LISTENER` ne sont pas disponibles.
-- Les origins additionnelles où l'isolation scriptée s'applique sont déclarées côté front dans `src/config/socialNetworks.ts` puis transmises à `open_webview` et `set_bar_networks` (validation HTTPS/allowlist côté Rust Android), afin de couvrir aussi les switches natifs de la bottom bar Android.
-- Non couvert par cette isolation Android : IndexedDB, CacheStorage, service workers, HTTP cache WebView global, et credential stores système.
+- Android WebView (plugin natif) : cookies + snapshots `localStorage` persistés par session `${profileId}-${networkId}` et par origin exacte. CinderReels déclare une origin explicite car son auth utilise `localStorage`; les autres réseaux utilisent le même mécanisme via leur URL principale.
+- Les origins additionnelles où l'isolation scriptée s'applique sont déclarées côté front dans `src/config/socialNetworks.ts` puis transmises à `open_webview` et `set_bar_networks` (validation HTTPS/allowlist côté Rust Android), afin de couvrir les réseaux dont l'auth/app traverse plusieurs domaines et les switches natifs de la bottom bar Android.
+- Mode dégradé explicite si `DOCUMENT_START_SCRIPT` ou `WEB_MESSAGE_LISTENER` ne sont pas disponibles.
+- Non couvert par cette isolation Android : IndexedDB, CacheStorage, service workers, HTTP cache WebView global, credential stores système. `sessionStorage` n'est pas une garantie durable.
+- Détail du contrat : `shipflow_data/technical/android-webview-session-isolation.md`.
 
 ### 4) Extension surfaces
 
