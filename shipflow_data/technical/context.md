@@ -106,10 +106,10 @@ SocialGlowz est une application social multi-canaux avec une base Vue 3 commune 
 - État local : Pinia + localStorage via stores.
 - Sync cloud : `src/lib/cloudSyncQueue.ts`, `src/lib/cloudSettings.ts`, `src/lib/cloudSync.ts`.
 - Backend : tables Convex (`users`, `socialAccounts`, `activeAccounts`, `settings`, `profiles`, `customLinks`, `friendsFilters`, `subscriptions`).
-- Android WebView (plugin natif) : cookies + snapshots `localStorage` persistés par session `${profileId}-${networkId}` et par origin exacte. CinderReels déclare une origin explicite car son auth utilise `localStorage`; les autres réseaux utilisent le même mécanisme via leur URL principale.
+- Android WebView (plugin natif) : quand Android WebKit `MULTI_PROFILE` est disponible, chaque session `${profileId}-${networkId}` utilise un profil WebKit natif distinct et un hôte WebView chaud dans un pool LRU borné. En fallback, le plugin revient au mode single-WebView avec cookies + snapshots `localStorage` persistés par session et par origin exacte. CinderReels déclare une origin explicite car son auth utilise `localStorage`; les autres réseaux utilisent le même mécanisme via leur URL principale.
 - Les origins additionnelles où l'isolation scriptée s'applique sont déclarées côté front dans `src/config/socialNetworks.ts` puis transmises à `open_webview` et `set_bar_networks` (validation HTTPS/allowlist côté Rust Android), afin de couvrir les réseaux dont l'auth/app traverse plusieurs domaines et les switches natifs de la bottom bar Android.
 - Mode dégradé explicite si `DOCUMENT_START_SCRIPT` ou `WEB_MESSAGE_LISTENER` ne sont pas disponibles.
-- Non couvert par cette isolation Android : IndexedDB, CacheStorage, service workers, HTTP cache WebView global, credential stores système. `sessionStorage` n'est pas une garantie durable.
+- Mode dégradé explicite aussi si `MULTI_PROFILE` est indisponible : le multi-WebView chaud est désactivé pour éviter un partage du `CookieManager` global. Les snapshots fallback ne couvrent pas IndexedDB, CacheStorage, service workers, HTTP cache WebView global, credential stores système. `sessionStorage` n'est pas une garantie durable.
 - Détail du contrat : `shipflow_data/technical/android-webview-session-isolation.md`.
 
 ### 4) Extension surfaces

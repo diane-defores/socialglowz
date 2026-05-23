@@ -1,7 +1,7 @@
 ---
 artifact: technical_module_context
 metadata_schema_version: "1.0"
-artifact_version: "1.0.0"
+artifact_version: "1.1.0"
 project: "socialglowz"
 created: "2026-05-23"
 updated: "2026-05-23"
@@ -18,6 +18,7 @@ linked_systems:
   - "shipflow_data/technical/context.md"
   - "shipflow_data/workflow/tauri-mobile.md"
   - "shipflow_data/workflow/specs/android-webview-storage-isolation.md"
+  - "shipflow_data/workflow/specs/android-webview-pooling-fast-switching.md"
   - "src/config/socialNetworks.ts"
   - "src/ui/setup/pages/SocialGlowz/composables/useNetworkWebview.ts"
   - "src/ui/setup/pages/SocialGlowz/composables/useWebviewPreload.ts"
@@ -39,7 +40,7 @@ next_step: "/sf-docs audit shipflow_data/technical/android-webview-session-isola
 
 ## Purpose
 
-Ce document décrit le contrat actif d'isolation des sessions WebView Android pour SocialGlowz. Il couvre les sessions de réseaux intégrés affichés dans le plugin Android WebView, pas l'auth Convex de l'application hôte.
+Ce document décrit le contrat actif d'isolation et de pooling des sessions WebView Android pour SocialGlowz. Il couvre les sessions de réseaux intégrés affichés dans le plugin Android WebView, pas l'auth Convex de l'application hôte.
 
 ## Owned Files
 
@@ -53,6 +54,8 @@ Ce document décrit le contrat actif d'isolation des sessions WebView Android po
 ## Entrypoints
 
 - `open_webview` ouvre une session réseau en utilisant la clé canonique `${profileId}-${networkId}`.
+- `hide_webview` garde l'hôte de session chaud quand le mode multi-profile est actif.
+- `show_webview` réaffiche une session chaude existante et renvoie si elle a été trouvée.
 - `set_bar_networks` configure les réseaux disponibles dans la bottom bar Android et transmet `storageOriginsByNetwork` pour les switches natifs.
 - `delete_network_session` doit supprimer les données persistées associées à la session ciblée.
 - Les flows backup/restore doivent conserver les snapshots `localStorage` sous la même clé session + origin.
@@ -61,10 +64,12 @@ Ce document décrit le contrat actif d'isolation des sessions WebView Android po
 
 SocialGlowz isole par défaut les sessions Android WebView par profil et réseau avec la clé `${profileId}-${networkId}`. Cette clé ne doit pas être remplacée par un bucket global, même en mode dégradé.
 
+Quand Android WebKit expose `WebViewFeature.MULTI_PROFILE`, cette clé est convertie en nom de profil WebKit déterministe et non sensible. La WebView de session reçoit ce profil via `WebViewCompat.setProfile` immédiatement après sa construction, avant toute configuration ou navigation. Ce mode permet de garder plusieurs WebViews chaudes dans un pool LRU borné sans partager le `CookieManager` global.
+
 L'isolation couvre:
 
-- les cookies persistés par session,
-- les snapshots `localStorage` persistés par session et par origin exacte.
+- en mode multi-profile: les données WebKit natives associées au profil de session, notamment cookies et WebStorage exposés par AndroidX WebKit,
+- en mode fallback: les cookies persistés par session et les snapshots `localStorage` persistés par session et par origin exacte.
 
 Les origins d'isolation viennent de `src/config/socialNetworks.ts`:
 
@@ -77,15 +82,18 @@ Les autres réseaux bénéficient du même mécanisme via leur URL principale. U
 ## Invariants
 
 - La frontière de session Android WebView reste `${profileId}-${networkId}`.
-- Les cookies et snapshots `localStorage` sont toujours associés à une origin exacte.
+- En mode multi-profile, une WebView de session doit recevoir son profil WebKit avant tout accès WebView autre que la construction.
+- Les cookies et snapshots fallback `localStorage` sont toujours associés à une origin exacte.
+- Le pool de WebViews chaudes reste borné; les hôtes evincés sont détruits avant suppression du profil WebKit.
 - Les origins additionnelles doivent rester déclaratives dans `src/config/socialNetworks.ts`.
-- Le mécanisme ne doit pas promettre la couverture d'IndexedDB, CacheStorage, service workers, cache HTTP global WebView ou credential store système.
+- Le fallback single-WebView ne doit pas promettre la couverture d'IndexedDB, CacheStorage, service workers, cache HTTP global WebView ou credential store système.
 - Les modes dégradés doivent être observables sans exposer de données sensibles.
 
 ## Degraded Modes
 
 Le plugin Android doit signaler un mode dégradé quand une WebView ne supporte pas les primitives nécessaires à l'isolation complète:
 
+- sans `MULTI_PROFILE`, le multi-WebView chaud est désactivé et le plugin revient au mode single-WebView avec snapshots,
 - sans `DOCUMENT_START_SCRIPT`, le restore `localStorage` ne peut pas être garanti avant le JavaScript de la page,
 - sans `WEB_MESSAGE_LISTENER`, la capture durable des changements `localStorage` peut être indisponible.
 
@@ -93,7 +101,7 @@ Le mode dégradé ne doit pas être présenté comme une isolation complète. Le
 
 ## Non-Coverage
 
-Cette isolation ne couvre pas:
+Le fallback par snapshots ne couvre pas:
 
 - IndexedDB,
 - CacheStorage,
@@ -110,13 +118,16 @@ Cette isolation ne couvre pas:
 - Vérifier le passage des origins:
   `rg -n "storageOrigins|storageOriginsByNetwork" src/ui/setup/pages/SocialGlowz src-tauri/src/lib.rs`
 - Vérifier les hooks natifs:
-  `rg -n "DOCUMENT_START_SCRIPT|WEB_MESSAGE_LISTENER|localStorage|restoreCookiesForSession|loadUrl|degraded" src-tauri/plugins/android-webview/android/src/main/java/com/socialglowz/webview/NativeWebViewPlugin.kt`
+  `rg -n "MULTI_PROFILE|ProfileStore|setProfile|DOCUMENT_START_SCRIPT|WEB_MESSAGE_LISTENER|localStorage|restoreCookiesForSession|loadUrl|degraded" src-tauri/plugins/android-webview/android/src/main/java/com/socialglowz/webview/NativeWebViewPlugin.kt`
+- Vérifier le pooling Android:
+  `rg -n "SessionWebViewHost|MAX_WARM|showWebView|hideWebView|destroyHost|shown" src-tauri/plugins/android-webview/android/src/main/java/com/socialglowz/webview/NativeWebViewPlugin.kt src-tauri/src/lib.rs src-tauri/plugins/android-webview/src/mobile.rs`
 - Tester Android depuis l'APK CI GitHub Actions / Blacksmith, artifact `socialglowz-android-debug`.
 
 ## Reader Checklist
 
 - Si une tâche change `src/config/socialNetworks.ts`, vérifier que les origins restent HTTPS et minimales.
-- Si une tâche change `open_webview`, `set_bar_networks`, backup, restore ou delete session, vérifier que la clé `${profileId}-${networkId}` reste la frontière de session.
+- Si une tâche change `open_webview`, `hide_webview`, `show_webview`, `set_bar_networks`, backup, restore ou delete session, vérifier que la clé `${profileId}-${networkId}` reste la frontière de session.
+- Si une tâche touche le pooling Android, vérifier que `MULTI_PROFILE` est le seul mode autorisant plusieurs WebViews chaudes.
 - Si une tâche ajoute un réseau dont l'auth traverse plusieurs domaines, ajouter uniquement les origins nécessaires à la matrice.
 - Si une tâche touche le plugin Android WebView, vérifier que les limites de non-couverture restent documentées.
 

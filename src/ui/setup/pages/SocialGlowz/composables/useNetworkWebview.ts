@@ -14,8 +14,8 @@ async function invoke(cmd: string, args?: Record<string, unknown>) {
 /**
  * Manages a native Tauri child webview for a (profile, network) pair,
  * positioned over the given host element.
- * Each profile×network gets its own isolated data directory
- * → separate cookies / localStorage / IndexedDB.
+ * Each profile×network gets its own native isolation boundary
+ * (desktop data directory, Android WebKit profile when supported).
  */
 export function useNetworkWebview(hostEl: Ref<HTMLElement | null>) {
   const { x, y, width, height } = useElementBounding(hostEl)

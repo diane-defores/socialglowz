@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tauri::{plugin::PluginHandle, Runtime};
 
@@ -17,6 +17,12 @@ pub struct OpenRequest {
 #[serde(rename_all = "camelCase")]
 pub struct AccountRequest {
     pub account_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ShowResponse {
+    shown: bool,
 }
 
 #[derive(Serialize)]
@@ -98,20 +104,27 @@ impl<R: Runtime> AndroidWebview<R> {
             .map_err(|e| Error::PluginInvoke(e.to_string()))
     }
 
-    pub fn show(&self, account_id: &str) -> Result<()> {
-        self.0
+    pub fn show(&self, account_id: &str) -> Result<bool> {
+        let response: ShowResponse = self
+            .0
             .run_mobile_plugin(
                 "showWebView",
                 AccountRequest {
                     account_id: account_id.to_string(),
                 },
             )
-            .map_err(|e| Error::PluginInvoke(e.to_string()))
+            .map_err(|e| Error::PluginInvoke(e.to_string()))?;
+        Ok(response.shown)
     }
 
-    pub fn hide(&self) -> Result<()> {
+    pub fn hide(&self, account_id: &str) -> Result<()> {
         self.0
-            .run_mobile_plugin::<()>("hideWebView", ())
+            .run_mobile_plugin(
+                "hideWebView",
+                AccountRequest {
+                    account_id: account_id.to_string(),
+                },
+            )
             .map_err(|e| Error::PluginInvoke(e.to_string()))
     }
 

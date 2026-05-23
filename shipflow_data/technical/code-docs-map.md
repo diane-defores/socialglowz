@@ -1,7 +1,7 @@
 ---
 artifact: documentation
 metadata_schema_version: "1.0"
-artifact_version: "1.0.0"
+artifact_version: "1.0.1"
 project: "socialglowz"
 created: "2026-05-14"
 updated: "2026-05-22"
@@ -27,6 +27,11 @@ linked_systems:
 depends_on:
   - "shipflow_data/technical/context.md"
 supersedes: []
+evidence:
+  - "src-tauri/src/lib.rs"
+  - "src-tauri/plugins/android-webview/src/mobile.rs"
+  - "src-tauri/plugins/android-webview/android/src/main/java/com/socialglowz/webview/NativeWebViewPlugin.kt"
+  - "shipflow_data/technical/android-webview-session-isolation.md"
 next_step: "/sf-docs maintain shipflow_data/technical/code-docs-map.md"
 ---
 
@@ -74,7 +79,7 @@ next_step: "/sf-docs maintain shipflow_data/technical/code-docs-map.md"
 - Docs:
   - `README.md`
 
-## Android WebView storage isolation matrix
+## Android WebView storage isolation and pooling
 
 - Code:
   - `src/config/socialNetworks.ts`
@@ -84,10 +89,13 @@ next_step: "/sf-docs maintain shipflow_data/technical/code-docs-map.md"
   - `src-tauri/plugins/android-webview/src/mobile.rs`
   - `src-tauri/plugins/android-webview/android/src/main/java/com/socialglowz/webview/NativeWebViewPlugin.kt`
 - Behavior:
+  - Quand Android WebKit `MULTI_PROFILE` est disponible, le plugin rattache chaque WebView de session `${profileId}-${networkId}` à un profil WebKit natif distinct via `WebViewCompat.setProfile`, avant toute configuration ou navigation.
+  - Les hôtes WebView de session sont conservés dans un pool LRU borné pour accélérer les switches; `hide_webview`/`show_webview` Android reflètent maintenant ce contrat au lieu de détruire systématiquement la WebView.
+  - Si `MULTI_PROFILE` est indisponible ou échoue, le plugin annonce un fallback single-WebView et désactive le pooling multi-WebView pour éviter un partage du `CookieManager` global.
   - Une matrice déclarative définit la politique d'isolation (par défaut `cookies` + `localStorage`, non-couverture `sessionStorage`/`IndexedDB`/`CacheStorage`/`serviceWorker`) et les origins additionnelles par réseau.
   - Le front passe `storageOrigins` à `open_webview` pour ouverture normale/preload et `storageOriginsByNetwork` à `set_bar_networks` pour les switches de la bottom bar native.
   - Rust Android valide/normalise ces origins (HTTPS + host autorisé par réseau + réseau visible pour la bottom bar) puis les transmet au plugin mobile.
-  - Le plugin Kotlin élargit `allowedOrigins` des hooks globaux d'isolation stockage sans branche réseau spécifique, y compris lors d'un changement de réseau piloté uniquement côté natif.
+  - Le plugin Kotlin élargit `allowedOrigins` des hooks d'isolation/capture stockage sans branche réseau spécifique, y compris lors d'un changement de réseau piloté uniquement côté natif.
 - Docs:
   - `shipflow_data/technical/context.md`
   - `shipflow_data/workflow/specs/android-webview-storage-isolation.md`

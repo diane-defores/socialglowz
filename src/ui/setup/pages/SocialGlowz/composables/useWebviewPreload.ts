@@ -19,7 +19,7 @@ const PRELOAD_COUNT = 3
  */
 export async function preloadWebviews() {
   if (!isTauri()) return
-  // Skip on Android — the Kotlin plugin already pre-warms a blank WebView.
+  // Skip on Android: the Kotlin plugin manages the visible host pool itself.
   // Calling open_webview here would show the social overlay on startup.
   if (/android/i.test(navigator.userAgent)) return
 

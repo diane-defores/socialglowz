@@ -41,6 +41,7 @@ import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import androidx.webkit.ScriptHandler
+import androidx.webkit.ProfileStore
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
@@ -48,6 +49,7 @@ import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import java.net.URL
+import java.security.MessageDigest
 import org.json.JSONObject
 
 private const val TAG = "SFZ"
@@ -60,6 +62,8 @@ private const val DEFAULT_TAP_SOUND_VARIANT = "classic"
 private const val STORAGE_BRIDGE_OBJECT = "sfzStorageBridge"
 private const val LOCAL_STORAGE_PREFS_NAME = "sfz_local_storage"
 private const val LOCAL_STORAGE_CAPTURE_MAX_BYTES = 262_144
+private const val WEBKIT_PROFILE_PREFIX = "sgzp_"
+private const val MAX_WARM_HOSTS = 3
 private val TAP_SOUND_ASSETS = mapOf(
     "classic" to "sounds/click.wav",
     "soft" to "sounds/soft.wav",
@@ -152,6 +156,24 @@ private data class SessionIdentity(
     val profileId: String,
     val networkId: String,
     val sessionKey: String,
+)
+
+private data class SessionWebViewHost(
+    val session: SessionIdentity,
+    val profileName: String,
+    val root: FrameLayout,
+    val webView: WebView,
+    var bottomBar: LinearLayout,
+    var localStorageScriptHandler: ScriptHandler? = null,
+    var localStorageRestoreActive: Boolean = false,
+    var localStorageCaptureActive: Boolean = false,
+    var initialBackIndex: Int = -1,
+    var isLoggedIn: Boolean = false,
+    var pagesSinceOpen: Int = 0,
+    var facebookDesktopOverride: Boolean = false,
+    var facebookStoryNoticeShown: Boolean = false,
+    var lastUsedAt: Long = 0L,
+    var isVisible: Boolean = false,
 )
 
 // ── i18n ──────────────────────────────────────────────────────────────────────
@@ -885,13 +907,17 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
 
     private var socialRoot: FrameLayout? = null
     private var socialWebView: WebView? = null
-    private var prewarmedWebView: WebView? = null
     private var currentAccountId: String? = null
     private var currentNetworkId: String? = null
     private var activeSessionIdentity: SessionIdentity? = null
     private var localStorageScriptHandler: ScriptHandler? = null
     private var localStorageRestoreActive = false
     private var localStorageCaptureActive = false
+    private val sessionHosts = linkedMapOf<String, SessionWebViewHost>()
+    private var activeHostSessionKey: String? = null
+    private var multiProfileModeEnabled = false
+    private var multiProfileInitTried = false
+    private var disableMultiProfilePooling = false
     private val declaredStorageOriginsByNetwork = mutableMapOf<String, Set<String>>()
     private val declaredStorageOriginsBySession = mutableMapOf<String, Set<String>>()
 
@@ -1026,8 +1052,9 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
     /** Check if the current network has auth cookies → user is logged in. */
     private fun checkLoggedIn(): Boolean {
         val networkId = currentNetworkId ?: return false
+        val sessionKey = currentAccountId ?: return false
         val authNames = AUTH_COOKIES[networkId] ?: return false
-        val cm = CookieManager.getInstance()
+        val cm = profileCookieManagerForSession(sessionKey) ?: CookieManager.getInstance()
         val net = NETWORKS.find { it.id == networkId } ?: return false
         val cookies = cm.getCookie(net.url) ?: return false
         return authNames.any { name -> cookies.contains("$name=") }
@@ -1065,7 +1092,7 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
     private fun findWebViewRecursive(parent: ViewGroup): WebView? {
         for (i in 0 until parent.childCount) {
             val child = parent.getChildAt(i)
-            if (child is WebView && child !== socialWebView) {
+            if (child is WebView && !isManagedHostWebView(child)) {
                 return child
             }
             if (child is ViewGroup) {
@@ -1074,6 +1101,24 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
             }
         }
         return null
+    }
+
+    private fun isManagedHostWebView(candidate: WebView): Boolean {
+        if (candidate === socialWebView) return true
+        return sessionHosts.values.any { it.webView === candidate }
+    }
+
+    private fun hostForWebView(candidate: WebView): SessionWebViewHost? {
+        return sessionHosts.values.firstOrNull { it.webView === candidate }
+    }
+
+    private fun isInactiveManagedCallback(view: WebView): Boolean {
+        val host = hostForWebView(view) ?: return false
+        if (host.session.sessionKey == activeHostSessionKey) {
+            syncGlobalsFromHost(host)
+            return false
+        }
+        return true
     }
 
     /**
@@ -1172,6 +1217,95 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
             return SessionIdentity(profileId = profileId, networkId = networkId, sessionKey = normalizedSessionKey)
         }
         return null
+    }
+
+    private fun nowElapsedMs(): Long = android.os.SystemClock.elapsedRealtime()
+
+    private fun webkitProfileNameForSession(sessionKey: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(sessionKey.toByteArray(Charsets.UTF_8))
+        val hex = buildString(digest.size * 2) {
+            for (b in digest) append(String.format("%02x", b))
+        }
+        return WEBKIT_PROFILE_PREFIX + hex.take(24)
+    }
+
+    private fun ensureMultiProfileModeInitialized() {
+        if (multiProfileInitTried) return
+        multiProfileInitTried = true
+        multiProfileModeEnabled = WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)
+        if (multiProfileModeEnabled) {
+            dbg("android-webview mode=multi-profile")
+        } else {
+            disableMultiProfilePooling = true
+            dbg("android-webview mode=fallback-single-webview (MULTI_PROFILE unsupported)")
+        }
+    }
+
+    private fun isPoolingEnabled(): Boolean {
+        ensureMultiProfileModeInitialized()
+        return multiProfileModeEnabled && !disableMultiProfilePooling
+    }
+
+    private fun activeHost(): SessionWebViewHost? {
+        val activeKey = activeHostSessionKey ?: return null
+        return sessionHosts[activeKey]
+    }
+
+    private fun markHostUsed(host: SessionWebViewHost) {
+        host.lastUsedAt = nowElapsedMs()
+    }
+
+    private fun syncGlobalsFromHost(host: SessionWebViewHost) {
+        socialRoot = host.root
+        socialWebView = host.webView
+        bottomBarView = host.bottomBar
+        currentAccountId = host.session.sessionKey
+        currentNetworkId = host.session.networkId
+        activeSessionIdentity = host.session
+        localStorageScriptHandler = host.localStorageScriptHandler
+        localStorageRestoreActive = host.localStorageRestoreActive
+        localStorageCaptureActive = host.localStorageCaptureActive
+        initialBackIndex = host.initialBackIndex
+        isLoggedIn = host.isLoggedIn
+        pagesSinceOpen = host.pagesSinceOpen
+        facebookDesktopOverride = host.facebookDesktopOverride
+        facebookStoryNoticeShown = host.facebookStoryNoticeShown
+    }
+
+    private fun syncHostFromGlobals(host: SessionWebViewHost) {
+        host.localStorageScriptHandler = localStorageScriptHandler
+        host.localStorageRestoreActive = localStorageRestoreActive
+        host.localStorageCaptureActive = localStorageCaptureActive
+        host.initialBackIndex = initialBackIndex
+        host.isLoggedIn = isLoggedIn
+        host.pagesSinceOpen = pagesSinceOpen
+        host.facebookDesktopOverride = facebookDesktopOverride
+        host.facebookStoryNoticeShown = facebookStoryNoticeShown
+    }
+
+    private fun attachHostAsActive(host: SessionWebViewHost) {
+        syncGlobalsFromHost(host)
+        host.isVisible = true
+        markHostUsed(host)
+        activeHostSessionKey = host.session.sessionKey
+    }
+
+    private fun clearGlobalActivePointers() {
+        socialRoot = null
+        socialWebView = null
+        bottomBarView = null
+        currentAccountId = null
+        currentNetworkId = null
+        activeSessionIdentity = null
+        localStorageScriptHandler = null
+        localStorageRestoreActive = false
+        localStorageCaptureActive = false
+        initialBackIndex = -1
+        isLoggedIn = false
+        pagesSinceOpen = 0
+        facebookDesktopOverride = false
+        facebookStoryNoticeShown = false
     }
 
     private fun originFromUrl(url: String): String? {
@@ -1406,9 +1540,55 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
         """.trimIndent()
     }
 
+    private fun buildLocalStorageCaptureDocumentStartScript(sessionKey: String): String {
+        val quotedSessionKey = JSONObject.quote(sessionKey)
+        val quotedBridgeName = JSONObject.quote(STORAGE_BRIDGE_OBJECT)
+        return """
+            (function(){
+              if (window.__sfzLocalStorageBridgeSession === $quotedSessionKey) return;
+              window.__sfzLocalStorageBridgeSession = $quotedSessionKey;
+              var bridgeName = $quotedBridgeName;
+              var bridge = window[bridgeName];
+              if (!bridge || typeof bridge.postMessage !== 'function') return;
+              var sendSnapshot = function(reason) {
+                try {
+                  var data = {};
+                  for (var i = 0; i < localStorage.length; i++) {
+                    var key = localStorage.key(i);
+                    if (key === null) continue;
+                    data[key] = localStorage.getItem(key);
+                  }
+                  bridge.postMessage(JSON.stringify({
+                    type: 'localStorageSnapshot',
+                    sessionKey: $quotedSessionKey,
+                    origin: location.origin || '',
+                    reason: reason || 'change',
+                    data: data
+                  }));
+                } catch (e) {}
+              };
+              if (!window.__sfzLocalStoragePatched) {
+                window.__sfzLocalStoragePatched = true;
+                ['setItem','removeItem','clear'].forEach(function(methodName) {
+                  try {
+                    var original = localStorage[methodName];
+                    if (typeof original !== 'function') return;
+                    localStorage[methodName] = function() {
+                      var result = original.apply(localStorage, arguments);
+                      sendSnapshot(methodName);
+                      return result;
+                    };
+                  } catch (e) {}
+                });
+              }
+              sendSnapshot('init');
+            })();
+        """.trimIndent()
+    }
+
     /** Save all cookies for the current profile session key. */
     private fun saveCookiesForSession(sessionKey: String) {
-        val cm = CookieManager.getInstance()
+        val cm = profileCookieManagerForSession(sessionKey) ?: CookieManager.getInstance()
         val editor = cookiePrefs.edit()
         var totalSaved = 0
         for (url in COOKIE_URLS) {
@@ -1437,6 +1617,45 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
     }
 
     private fun restoreCookiesForSession(sessionKey: String, onComplete: (Boolean) -> Unit) {
+        if (isPoolingEnabled()) {
+            val cm = profileCookieManagerForSession(sessionKey)
+            if (cm == null) {
+                Log.w(TAG, "Session isolation degraded: WebKit profile cookie manager unavailable")
+                onComplete(false)
+                return
+            }
+            try {
+                var restoredCookies = 0
+                for (url in COOKIE_URLS) {
+                    val cookies = cookiePrefs.getString("$sessionKey|$url", null) ?: continue
+                    val domain = baseDomainOf(url)
+                    val parts = cookies.split(";")
+                    for (cookie in parts) {
+                        val trimmed = cookie.trim()
+                        if (trimmed.isEmpty()) continue
+                        val name = trimmed.substringBefore("=")
+                        val cookieWithAttrs = if (name.startsWith("__Host-")) {
+                            "$trimmed; Path=/; Secure"
+                        } else if (domain != null) {
+                            "$trimmed; Domain=$domain; Path=/; Secure"
+                        } else {
+                            trimmed
+                        }
+                        cm.setCookie(url, cookieWithAttrs)
+                        restoredCookies++
+                    }
+                }
+                cm.flush()
+                if (restoredCookies > 0) {
+                    dbg("cookies restored into WebKit profile (${restoredCookies} entries)")
+                }
+                onComplete(true)
+            } catch (e: Exception) {
+                Log.w(TAG, "Session isolation degraded: profile cookie restore error", e)
+                onComplete(false)
+            }
+            return
+        }
         val cm = CookieManager.getInstance()
         var done = false
         fun finish(ok: Boolean) {
@@ -1493,15 +1712,34 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
         }
     }
 
-    private fun resetStorageIsolationHooks(webView: WebView) {
+    private fun profileCookieManagerForSession(sessionKey: String): CookieManager? {
+        if (!isPoolingEnabled()) return null
+        val host = sessionHosts[sessionKey] ?: return null
+        return try {
+            WebViewCompat.getProfile(host.webView).cookieManager
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun resetStorageIsolationHooks(webView: WebView, host: SessionWebViewHost? = activeHost()) {
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             try {
-                localStorageScriptHandler?.remove()
+                host?.localStorageScriptHandler?.remove()
             } catch (e: Exception) {
                 Log.w(TAG, "Could not remove previous localStorage restore script", e)
             }
         }
-        localStorageScriptHandler = null
+        if (host != null) {
+            host.localStorageScriptHandler = null
+            host.localStorageRestoreActive = false
+            host.localStorageCaptureActive = false
+        }
+        if (host == activeHost()) {
+            localStorageScriptHandler = null
+            localStorageRestoreActive = false
+            localStorageCaptureActive = false
+        }
 
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             try {
@@ -1510,17 +1748,15 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
                 Log.w(TAG, "Could not remove previous localStorage listener", e)
             }
         }
-        localStorageRestoreActive = false
-        localStorageCaptureActive = false
     }
 
     private fun onLocalStorageBridgeMessage(
         messageJson: String?,
         sourceOrigin: Uri,
         isMainFrame: Boolean,
+        expectedSession: SessionIdentity,
     ) {
         if (!isMainFrame || messageJson.isNullOrBlank()) return
-        val activeSession = activeSessionIdentity ?: return
 
         val payload = try {
             JSONObject(messageJson)
@@ -1532,8 +1768,8 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
         if (payload.optString("type") != "localStorageSnapshot") return
 
         val payloadSessionKey = payload.optString("sessionKey", "")
-        if (payloadSessionKey != activeSession.sessionKey) {
-            Log.w(TAG, "Ignored localStorage bridge message for inactive session")
+        if (payloadSessionKey != expectedSession.sessionKey) {
+            Log.w(TAG, "Ignored localStorage bridge message for unexpected session")
             return
         }
 
@@ -1545,7 +1781,7 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
         }
 
         val storageData = payload.optJSONObject("data") ?: JSONObject()
-        saveLocalStorageSnapshot(activeSession.sessionKey, payloadOrigin, storageData)
+        saveLocalStorageSnapshot(expectedSession.sessionKey, payloadOrigin, storageData)
     }
 
     private fun configureStorageIsolationForNavigation(
@@ -1553,9 +1789,10 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
         session: SessionIdentity,
         targetUrl: String,
         declaredStorageOrigins: Collection<String> = emptyList(),
+        host: SessionWebViewHost? = activeHost(),
     ) {
         val targetOrigin = originFromUrl(targetUrl)
-        resetStorageIsolationHooks(webView)
+        resetStorageIsolationHooks(webView, host)
 
         if (targetOrigin == null) {
             Log.w(TAG, "Session isolation degraded: target origin unavailable")
@@ -1578,9 +1815,9 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
                     STORAGE_BRIDGE_OBJECT,
                     allowedOrigins
                 ) { _, message, sourceOrigin, isMainFrame, _ ->
-                    onLocalStorageBridgeMessage(message.data, sourceOrigin, isMainFrame)
+                    onLocalStorageBridgeMessage(message.data, sourceOrigin, isMainFrame, session)
                 }
-                localStorageCaptureActive = true
+                host?.localStorageCaptureActive = true
             } catch (e: Exception) {
                 Log.w(TAG, "Session isolation degraded: localStorage capture unavailable", e)
             }
@@ -1590,18 +1827,30 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
 
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             try {
-                val snapshotsByOrigin = buildSessionLocalStoragePayload(session.sessionKey, targetOrigin)
-                localStorageScriptHandler = WebViewCompat.addDocumentStartJavaScript(
+                val script = if (isPoolingEnabled()) {
+                    buildLocalStorageCaptureDocumentStartScript(session.sessionKey)
+                } else {
+                    val snapshotsByOrigin = buildSessionLocalStoragePayload(session.sessionKey, targetOrigin)
+                    buildLocalStorageDocumentStartScript(session.sessionKey, snapshotsByOrigin)
+                }
+                val handler = WebViewCompat.addDocumentStartJavaScript(
                     webView,
-                    buildLocalStorageDocumentStartScript(session.sessionKey, snapshotsByOrigin),
+                    script,
                     allowedOrigins
                 )
-                localStorageRestoreActive = true
+                host?.localStorageScriptHandler = handler
+                host?.localStorageRestoreActive = !isPoolingEnabled()
             } catch (e: Exception) {
                 Log.w(TAG, "Session isolation degraded: localStorage restore unavailable", e)
             }
         } else {
             Log.w(TAG, "Session isolation degraded: DOCUMENT_START_SCRIPT unsupported")
+        }
+
+        if (host == activeHost()) {
+            localStorageScriptHandler = host?.localStorageScriptHandler
+            localStorageRestoreActive = host?.localStorageRestoreActive ?: false
+            localStorageCaptureActive = host?.localStorageCaptureActive ?: false
         }
     }
 
@@ -1610,6 +1859,7 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
         session: SessionIdentity,
         targetUrl: String,
         declaredStorageOrigins: Collection<String> = emptyList(),
+        host: SessionWebViewHost? = activeHost(),
         onReady: (Boolean) -> Unit,
     ) {
         activeSessionIdentity = session
@@ -1617,8 +1867,254 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
             if (!cookiesRestored) {
                 Log.w(TAG, "Session isolation degraded: cookie restore did not complete cleanly")
             }
-            configureStorageIsolationForNavigation(webView, session, targetUrl, declaredStorageOrigins)
+            configureStorageIsolationForNavigation(
+                webView,
+                session,
+                targetUrl,
+                declaredStorageOrigins,
+                host,
+            )
             onReady(cookiesRestored)
+        }
+    }
+
+    private fun hideHostInternal(
+        host: SessionWebViewHost,
+        persistFallbackSnapshot: Boolean = true,
+    ) {
+        syncGlobalsFromHost(host)
+        if (persistFallbackSnapshot) {
+            saveCookiesForSession(host.session.sessionKey)
+        }
+        syncHostFromGlobals(host)
+        host.isVisible = false
+        host.root.visibility = View.GONE
+        host.webView.onPause()
+        markHostUsed(host)
+    }
+
+    private fun showHostInternal(host: SessionWebViewHost) {
+        attachHostAsActive(host)
+        host.root.visibility = View.VISIBLE
+        host.webView.onResume()
+        applyVisibleHostPreferences(host)
+        updateBottomBarActiveNetwork(host.session.networkId)
+        registerBackCallback()
+    }
+
+    private fun applyVisibleHostPreferences(host: SessionWebViewHost) {
+        applyTextZoomToWebView(host.webView)
+        applyDarkModeToWebView(host.webView)
+        applyGrayscaleToWebView(host.webView)
+        applyMuteToWebView(host.webView)
+        applyGrayscaleToBottomBar(host.bottomBar)
+        applyDarkModeToBottomBar(host.bottomBar)
+    }
+
+    private fun hideCurrentHostIfAny(persistFallbackSnapshot: Boolean = true) {
+        val host = activeHost() ?: return
+        hideHostInternal(host, persistFallbackSnapshot)
+    }
+
+    private fun switchToSession(
+        targetSession: SessionIdentity,
+        targetUrl: String,
+        loadIfMissing: Boolean,
+        declaredStorageOrigins: Collection<String> = emptyList(),
+        onResult: (shown: Boolean, cookiesRestored: Boolean) -> Unit,
+    ) {
+        ensureMultiProfileModeInitialized()
+
+        if (!isPoolingEnabled()) {
+            val keysToDestroy = sessionHosts.keys
+                .filter { it != targetSession.sessionKey }
+                .toList()
+            for (key in keysToDestroy) {
+                destroyHost(key, "fallback-single")
+            }
+        }
+
+        val current = activeHost()
+        if (current != null && current.session.sessionKey != targetSession.sessionKey) {
+            hideHostInternal(current)
+        }
+
+        val existing = sessionHosts[targetSession.sessionKey]
+        if (existing != null) {
+            showHostInternal(existing)
+            onResult(true, true)
+            return
+        }
+
+        if (!loadIfMissing) {
+            onResult(false, false)
+            return
+        }
+
+        val created = createHostForSession(targetSession, targetUrl)
+        if (created == null) {
+            onResult(false, false)
+            return
+        }
+
+        showHostInternal(created)
+        if (targetSession.networkId == "facebook") {
+            created.facebookDesktopOverride = isFacebookDesktopFlow(targetUrl)
+            created.facebookStoryNoticeShown = false
+        }
+        syncGlobalsFromHost(created)
+        created.initialBackIndex = -1
+        created.isLoggedIn = false
+        created.pagesSinceOpen = 0
+        prepareSessionBeforeLoad(
+            created.webView,
+            targetSession,
+            targetUrl,
+            declaredStorageOrigins,
+            created,
+        ) { cookiesRestored ->
+            created.initialBackIndex = -1
+            created.isLoggedIn = false
+            created.pagesSinceOpen = 0
+            syncGlobalsFromHost(created)
+            applyUaForNetwork(targetSession.networkId, targetUrl)
+            created.webView.loadUrl(targetUrl)
+            updateBottomBarActiveNetwork(targetSession.networkId)
+            incrementUsage(targetSession.networkId)
+            syncHostFromGlobals(created)
+            enforceWarmHostBound()
+            onResult(true, cookiesRestored)
+        }
+    }
+
+    private fun createHostForSession(session: SessionIdentity, initialUrl: String): SessionWebViewHost? {
+        val density = activity.resources.displayMetrics.density
+        val windowInsets = activity.window.decorView.rootWindowInsets
+        val statusBarHeight = windowInsets?.systemWindowInsetTop ?: 0
+        val navBarHeight = windowInsets?.systemWindowInsetBottom ?: 0
+        val barHeight = (52 * density).toInt()
+
+        val root = FrameLayout(activity)
+        val webView = createWebView(webkitProfileNameForSession(session.sessionKey))
+
+        val wvParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+        wvParams.topMargin = statusBarHeight
+        wvParams.bottomMargin = navBarHeight + barHeight
+        webView.layoutParams = wvParams
+        webView.setOnApplyWindowInsetsListener { _, insets ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                android.view.WindowInsets.CONSUMED
+            } else {
+                @Suppress("DEPRECATION")
+                insets.replaceSystemWindowInsets(0, 0, 0, 0)
+            }
+        }
+
+        val bottomBar = buildBottomBar(density, navBarHeight, session.networkId, sortedNetworks())
+        val bottomBarParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            barHeight + navBarHeight
+        )
+        bottomBarParams.gravity = Gravity.BOTTOM
+        bottomBar.layoutParams = bottomBarParams
+
+        root.addView(webView)
+        root.addView(bottomBar)
+        root.visibility = View.GONE
+
+        activity.addContentView(
+            root,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+
+        val host = SessionWebViewHost(
+            session = session,
+            profileName = webkitProfileNameForSession(session.sessionKey),
+            root = root,
+            webView = webView,
+            bottomBar = bottomBar,
+            lastUsedAt = nowElapsedMs(),
+        )
+
+        sessionHosts[session.sessionKey] = host
+        markHostUsed(host)
+        applyMuteToWebView(webView)
+        if (isGrayscale) applyGrayscaleToWebView(webView)
+        applyTextZoomToWebView(webView)
+        if (session.networkId == "facebook") {
+            host.facebookDesktopOverride = isFacebookDesktopFlow(initialUrl)
+            host.facebookStoryNoticeShown = false
+        }
+        return host
+    }
+
+    private fun destroyHost(sessionKey: String, reason: String) {
+        val host = sessionHosts[sessionKey] ?: return
+        if (activeHostSessionKey == sessionKey) {
+            activeHostSessionKey = null
+        }
+        syncGlobalsFromHost(host)
+        hideHostInternal(host)
+        dismissPopupMenu()
+        resetStorageIsolationHooks(host.webView, host)
+        runCatching { host.webView.stopLoading() }
+        runCatching { host.webView.onPause() }
+        sessionHosts.remove(sessionKey)
+        host.webView.destroy()
+        (host.root.parent as? ViewGroup)?.removeView(host.root)
+        dbg("host destroyed reason=$reason")
+
+        if (activeHostSessionKey == null) {
+            clearGlobalActivePointers()
+            backCallback?.remove()
+            backCallback = null
+        } else {
+            val stillActive = activeHost()
+            if (stillActive != null) {
+                syncGlobalsFromHost(stillActive)
+            }
+        }
+    }
+
+    private fun enforceWarmHostBound() {
+        if (!isPoolingEnabled()) return
+        if (sessionHosts.size <= MAX_WARM_HOSTS) return
+
+        val candidates = sessionHosts.values
+            .filter { !it.isVisible }
+            .sortedBy { it.lastUsedAt }
+
+        for (host in candidates) {
+            if (sessionHosts.size <= MAX_WARM_HOSTS) break
+            destroyHost(host.session.sessionKey, "lru-evict")
+        }
+    }
+
+    private fun disablePoolingAndDestroyInactiveHosts() {
+        disableMultiProfilePooling = true
+        val keys = sessionHosts.values
+            .filter { !it.isVisible }
+            .map { it.session.sessionKey }
+        for (key in keys) {
+            destroyHost(key, "disable-pooling")
+        }
+    }
+
+    private fun deleteWebkitProfileByName(profileName: String) {
+        if (!isPoolingEnabled()) return
+        try {
+            val deleted = ProfileStore.getInstance().deleteProfile(profileName)
+            dbg("webkit profile delete requested=$deleted")
+        } catch (e: IllegalStateException) {
+            Log.w(TAG, "Could not delete WebKit profile (still in use)")
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not delete WebKit profile")
         }
     }
 
@@ -1626,11 +2122,7 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
     override fun load(webView: WebView) {
         mainWebView = webView
         Log.i(TAG, "load() called — mainWebView captured: ${webView.hashCode()}")
-        // Pre-warm a WebView so the first network open is instant (~200ms saved)
-        activity.runOnUiThread {
-            prewarmedWebView = createWebView()
-            Log.i(TAG, "WebView pre-warmed")
-        }
+        ensureMultiProfileModeInitialized()
         // Init SoundPool for tap sound (uses bundled asset, independent of system "Touch sounds" setting)
         initSoundPool()
         // Register SAF file pickers using activityResultRegistry directly
@@ -1841,8 +2333,16 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
         }
     }
 
-    private fun seedLinkedInThemeCookies() {
-        val cookieManager = CookieManager.getInstance()
+    private fun cookieManagerForWebView(view: WebView?): CookieManager {
+        if (view != null && isPoolingEnabled()) {
+            return runCatching { WebViewCompat.getProfile(view).cookieManager }
+                .getOrElse { CookieManager.getInstance() }
+        }
+        return CookieManager.getInstance()
+    }
+
+    private fun seedLinkedInThemeCookies(view: WebView?) {
+        val cookieManager = cookieManagerForWebView(view)
         val themeValue = if (isDarkMode) "dark" else "light"
         val booleanThemeValue = if (isDarkMode) "true" else "false"
         val cookieValues = linkedMapOf(
@@ -1909,7 +2409,7 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
             (view.url?.contains("linkedin.com", ignoreCase = true) == true)
 
         if (isLinkedInView) {
-            seedLinkedInThemeCookies()
+            seedLinkedInThemeCookies(view)
         }
 
         try {
@@ -2240,137 +2740,24 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
         setDeclaredStorageOrigins(session, args.storageOrigins)
         val declaredStorageOrigins = getDeclaredStorageOrigins(session)
 
-        incrementUsage(session.networkId)
         dbg("▶ OPEN webview: network=${session.networkId} url=${args.url}")
 
         activity.runOnUiThread {
-            if (session.networkId != "facebook") {
-                facebookStoryNoticeShown = false
-            }
-            if (socialWebView != null) {
-                dbg("  reuse existing webview (switch)")
-                // Save cookies for the old session before switching
-                currentAccountId?.let { saveCookiesForSession(it) }
-
-                val webView = socialWebView
-                if (webView == null) {
-                    invoke.reject("Android WebView unavailable")
-                    return@runOnUiThread
+            switchToSession(
+                targetSession = session,
+                targetUrl = args.url,
+                loadIfMissing = true,
+                declaredStorageOrigins = declaredStorageOrigins,
+            ) { shown, cookiesRestored ->
+                if (!shown) {
+                    invoke.reject("Android session host unavailable")
+                    return@switchToSession
                 }
-
-                prepareSessionBeforeLoad(
-                    webView,
-                    session,
-                    args.url,
-                    declaredStorageOrigins
-                ) { cookiesRestored ->
-                    initialBackIndex = -1  // Reset baseline for new network URL
-                    isLoggedIn = false; pagesSinceOpen = 0  // Re-check auth on new network
-                    if (session.networkId == "facebook") {
-                        facebookDesktopOverride = isFacebookDesktopFlow(args.url)
-                    }
-                    applyUaForNetwork(session.networkId, args.url)
-                    webView.loadUrl(args.url)
-                    currentAccountId = session.sessionKey
-                    currentNetworkId = session.networkId
-                    updateBottomBarActiveNetwork(session.networkId)
-                    showSocialView()
-                    val result = JSObject()
-                    result.put("cookiesRestored", cookiesRestored)
-                    result.put("localStorageRestoreActive", localStorageRestoreActive)
-                    result.put("localStorageCaptureActive", localStorageCaptureActive)
-                    invoke.resolve(result)
-                }
-                return@runOnUiThread
-            }
-
-            val density = activity.resources.displayMetrics.density
-
-            // System window insets (status bar top, nav bar bottom)
-            val windowInsets = activity.window.decorView.rootWindowInsets
-            val statusBarHeight = windowInsets?.systemWindowInsetTop ?: 0
-            val navBarHeight   = windowInsets?.systemWindowInsetBottom ?: 0
-
-            val barHeight = (52 * density).toInt()
-
-            // ── Root container ───────────────────────────────────────────────
-            val root = FrameLayout(activity)
-
-            // ── WebView (below status bar, above our bar + nav bar) ──────────
-            val webView = prewarmedWebView?.also { prewarmedWebView = null } ?: createWebView()
-            val wvParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-            wvParams.topMargin = statusBarHeight
-            wvParams.bottomMargin = navBarHeight + barHeight
-            webView.layoutParams = wvParams
-
-            // Consume window insets so the web content doesn't see safe-area-inset-bottom.
-            // Without this, sites like Instagram/Threads double-account the nav bar height:
-            // once via our bottomMargin, once via CSS env(safe-area-inset-bottom).
-            webView.setOnApplyWindowInsetsListener { v, insets ->
-                // Return zero insets — the WebView is already positioned correctly via margins
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    android.view.WindowInsets.CONSUMED
-                } else {
-                    @Suppress("DEPRECATION")
-                    insets.replaceSystemWindowInsets(0, 0, 0, 0)
-                }
-            }
-
-            // ── Bottom overlay bar (above nav bar) ───────────────────────────
-            val bottomBar = buildBottomBar(density, navBarHeight, session.networkId, sortedNetworks())
-            bottomBarView = bottomBar
-            val bottomBarParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                barHeight + navBarHeight
-            )
-            bottomBarParams.gravity = Gravity.BOTTOM
-            bottomBar.layoutParams = bottomBarParams
-
-            root.addView(webView)
-            root.addView(bottomBar)  // drawn on top of webview
-
-            activity.addContentView(
-                root,
-                FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-            )
-
-            socialRoot = root
-            socialWebView = webView
-            currentAccountId = session.sessionKey
-            currentNetworkId = session.networkId
-
-            // Intercept the Android hardware back button while the social webview is visible.
-            // Priority: go back in webview history → if no history, signal Vue to close overlay.
-            registerBackCallback()
-
-            isLoggedIn = false; pagesSinceOpen = 0  // Re-check auth on new network
-
-            // Apply persisted mute state to the new webview via JS
-            applyMuteToWebView(webView)
-
-            if (session.networkId == "facebook") {
-                facebookDesktopOverride = isFacebookDesktopFlow(args.url)
-                facebookStoryNoticeShown = false
-            }
-
-            prepareSessionBeforeLoad(
-                webView,
-                session,
-                args.url,
-                declaredStorageOrigins
-            ) { cookiesRestored ->
-                applyUaForNetwork(session.networkId, args.url)
-                webView.loadUrl(args.url)
+                val host = activeHost()
                 val result = JSObject()
                 result.put("cookiesRestored", cookiesRestored)
-                result.put("localStorageRestoreActive", localStorageRestoreActive)
-                result.put("localStorageCaptureActive", localStorageCaptureActive)
+                result.put("localStorageRestoreActive", host?.localStorageRestoreActive ?: false)
+                result.put("localStorageCaptureActive", host?.localStorageCaptureActive ?: false)
                 invoke.resolve(result)
             }
         }
@@ -2382,6 +2769,12 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
     fun navigateWebView(invoke: Invoke) {
         val args = invoke.parseArgs(NavigateArgs::class.java)
         activity.runOnUiThread {
+            val host = activeHost()
+            val webView = host?.webView ?: socialWebView
+            if (webView == null) {
+                invoke.reject("Android WebView unavailable")
+                return@runOnUiThread
+            }
             if (args.networkId == "facebook") {
                 facebookDesktopOverride = isFacebookDesktopFlow(args.url)
                 facebookStoryNoticeShown = false
@@ -2389,8 +2782,12 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
             initialBackIndex = -1  // Reset baseline for new network URL
             isLoggedIn = false; pagesSinceOpen = 0
             applyUaForNetwork(args.networkId, args.url)
-            socialWebView?.loadUrl(args.url)
+            webView.loadUrl(args.url)
             currentNetworkId = args.networkId
+            host?.let {
+                syncHostFromGlobals(it)
+                markHostUsed(it)
+            }
             updateBottomBarActiveNetwork(args.networkId)
             invoke.resolve(JSObject())
         }
@@ -2400,9 +2797,15 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
 
     @Command
     fun closeWebView(invoke: Invoke) {
+        val args = invoke.parseArgs(AccountArgs::class.java)
         val latch = java.util.concurrent.CountDownLatch(1)
         activity.runOnUiThread {
-            destroySocialView()
+            val session = parseSessionIdentity(args.accountId)
+            if (session != null) {
+                destroyHost(session.sessionKey, "close-command")
+            } else {
+                destroySocialView()
+            }
             latch.countDown()
         }
         latch.await()
@@ -2413,16 +2816,50 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
 
     @Command
     fun showWebView(invoke: Invoke) {
-        activity.runOnUiThread { showSocialView() }
-        invoke.resolve(JSObject())
+        val args = invoke.parseArgs(AccountArgs::class.java)
+        activity.runOnUiThread {
+            val session = parseSessionIdentity(args.accountId)
+            val shown = if (session == null) {
+                false
+            } else {
+                val host = sessionHosts[session.sessionKey]
+                if (host == null) {
+                    false
+                } else {
+                    val current = activeHost()
+                    if (current != null && current.session.sessionKey != host.session.sessionKey) {
+                        hideHostInternal(current)
+                    }
+                    showHostInternal(host)
+                    true
+                }
+            }
+            val result = JSObject()
+            result.put("shown", shown)
+            invoke.resolve(result)
+        }
     }
 
     // ── Hide ─────────────────────────────────────────────────────────────────
 
     @Command
     fun hideWebView(invoke: Invoke) {
-        activity.runOnUiThread { hideSocialView() }
-        invoke.resolve(JSObject())
+        val args = invoke.parseArgs(AccountArgs::class.java)
+        activity.runOnUiThread {
+            val requested = parseSessionIdentity(args.accountId)
+            val active = activeHost()
+            val hostToHide = when {
+                requested != null && active?.session?.sessionKey == requested.sessionKey -> active
+                requested != null -> sessionHosts[requested.sessionKey]
+                else -> active
+            }
+            if (hostToHide != null) {
+                hideHostInternal(hostToHide)
+            } else {
+                hideSocialView()
+            }
+            invoke.resolve(JSObject())
+        }
     }
 
     // ── Set grayscale (called from Vue settings toggle) ───────────────────────
@@ -2432,8 +2869,15 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
         val args = invoke.parseArgs(GrayscaleArgs::class.java)
         activity.runOnUiThread {
             isGrayscale = args.enabled
-            applyGrayscaleToWebView(socialWebView)
-            applyGrayscaleToBottomBar(bottomBarView)
+            if (sessionHosts.isEmpty()) {
+                applyGrayscaleToWebView(socialWebView)
+                applyGrayscaleToBottomBar(bottomBarView)
+            } else {
+                sessionHosts.values.forEach { host ->
+                    applyGrayscaleToWebView(host.webView)
+                    applyGrayscaleToBottomBar(host.bottomBar)
+                }
+            }
         }
         invoke.resolve(JSObject())
     }
@@ -2447,7 +2891,13 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
             isDarkMode = args.enabled
             dbg("[dark] toggle requested=${if (isDarkMode) "dark" else "light"} net=${currentNetworkId ?: "?"}")
             applyNativeNightMode()
-            applyDarkModeToWebView(socialWebView)
+            if (sessionHosts.isEmpty()) {
+                applyDarkModeToWebView(socialWebView)
+            } else {
+                sessionHosts.values.forEach { host ->
+                    applyDarkModeToWebView(host.webView)
+                }
+            }
             logFacebookDarkState(socialWebView, "toggle")
             logLinkedInDarkState(socialWebView, "toggle")
             applyDarkModeToBottomBar(bottomBarView)
@@ -2512,8 +2962,15 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
         val args = invoke.parseArgs(TextZoomArgs::class.java)
         activity.runOnUiThread {
             textZoomLevel = normalizeTextZoomLevel(args.level)
-            socialWebView?.settings?.textZoom = textZoomLevel
-            applyTextZoomToWebView(socialWebView)
+            if (sessionHosts.isEmpty()) {
+                socialWebView?.settings?.textZoom = textZoomLevel
+                applyTextZoomToWebView(socialWebView)
+            } else {
+                sessionHosts.values.forEach { host ->
+                    host.webView.settings.textZoom = textZoomLevel
+                    applyTextZoomToWebView(host.webView)
+                }
+            }
         }
         invoke.resolve(JSObject())
     }
@@ -2700,6 +3157,12 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
         editor.apply()
         removeLocalStorageSnapshotsForSession(sessionKey)
         removeDeclaredStorageOriginsForSession(sessionKey)
+        activity.runOnUiThread {
+            destroyHost(sessionKey, "delete-network-session")
+            if (isPoolingEnabled()) {
+                deleteWebkitProfileByName(webkitProfileNameForSession(sessionKey))
+            }
+        }
         // Re-arm cookie consent if deleting the currently active session
         if (currentAccountId == sessionKey) {
             isLoggedIn = false
@@ -2728,6 +3191,18 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
         editor.apply()
         removeLocalStorageSnapshotsForProfile(profileId)
         removeDeclaredStorageOriginsForProfile(profileId)
+        activity.runOnUiThread {
+            val keysToDestroy = sessionHosts.values
+                .filter { it.session.profileId == profileId }
+                .map { it.session.sessionKey }
+                .toList()
+            for (sessionKey in keysToDestroy) {
+                destroyHost(sessionKey, "delete-profile-session")
+                if (isPoolingEnabled()) {
+                    deleteWebkitProfileByName(webkitProfileNameForSession(sessionKey))
+                }
+            }
+        }
         // Re-arm cookie consent if deleting the currently active profile
         if (currentAccountId?.let { parseSessionIdentity(it)?.profileId == profileId } == true) {
             isLoggedIn = false
@@ -2739,6 +3214,12 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
 
     /** Tear down and rebuild the bottom bar with the current filtered/sorted networks. */
     private fun rebuildBottomBar() {
+        if (sessionHosts.isNotEmpty()) {
+            for (host in sessionHosts.values.toList()) {
+                rebuildBottomBarForHost(host)
+            }
+            return
+        }
         val root = socialRoot ?: return
         val oldBar = bottomBarView ?: return
         root.removeView(oldBar)
@@ -2761,6 +3242,34 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
         root.addView(newBar)
 
         if (isGrayscale) applyGrayscaleToBottomBar(newBar)
+    }
+
+    private fun rebuildBottomBarForHost(host: SessionWebViewHost) {
+        val root = host.root
+        val oldBar = host.bottomBar
+        root.removeView(oldBar)
+
+        val density = activity.resources.displayMetrics.density
+        val windowInsets = root.rootWindowInsets
+        val navBarHeight = windowInsets?.systemWindowInsetBottom ?: 0
+        val activeId = host.session.networkId
+        val newBar = buildBottomBar(density, navBarHeight, activeId, sortedNetworks())
+        host.bottomBar = newBar
+
+        val barHeight = (52 * density).toInt()
+        val params = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            barHeight + navBarHeight
+        )
+        params.gravity = Gravity.BOTTOM
+        newBar.layoutParams = params
+        root.addView(newBar)
+
+        if (isGrayscale) applyGrayscaleToBottomBar(newBar)
+        if (activeHostSessionKey == host.session.sessionKey) {
+            bottomBarView = newBar
+            socialRoot = root
+        }
     }
 
     // ── Build bottom bar ─────────────────────────────────────────────────────
@@ -2990,7 +3499,11 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
         menu.addView(buildPopupMenuItem(density, muteIcon, muteLabel) {
             isMuted = !isMuted
             tapSoundEnabled = !isMuted
-            applyMuteToWebView(socialWebView)
+            if (sessionHosts.isEmpty()) {
+                applyMuteToWebView(socialWebView)
+            } else {
+                sessionHosts.values.forEach { host -> applyMuteToWebView(host.webView) }
+            }
             dispatchToVue("sfz-tap-sound-changed", """{"enabled": $tapSoundEnabled}""")
             dismissPopupMenu()
         })
@@ -2999,8 +3512,15 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
         val grayLabel = if (isGrayscale) Strings.t("grayscale_on") else Strings.t("grayscale_off")
         menu.addView(buildPopupMenuItem(density, "\ue9dd", grayLabel, dimmed = isGrayscale) {
             isGrayscale = !isGrayscale
-            applyGrayscaleToWebView(socialWebView)
-            applyGrayscaleToBottomBar(bottomBarView)
+            if (sessionHosts.isEmpty()) {
+                applyGrayscaleToWebView(socialWebView)
+                applyGrayscaleToBottomBar(bottomBarView)
+            } else {
+                sessionHosts.values.forEach { host ->
+                    applyGrayscaleToWebView(host.webView)
+                    applyGrayscaleToBottomBar(host.bottomBar)
+                }
+            }
             dispatchToVue("sfz-grayscale-changed", """{"enabled": $isGrayscale}""")
             dismissPopupMenu()
         })
@@ -3077,8 +3597,15 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
                 value.text = "$level%"
                 if (!fromUser || level == textZoomLevel) return
                 textZoomLevel = level
-                socialWebView?.settings?.textZoom = textZoomLevel
-                applyTextZoomToWebView(socialWebView)
+                if (sessionHosts.isEmpty()) {
+                    socialWebView?.settings?.textZoom = textZoomLevel
+                    applyTextZoomToWebView(socialWebView)
+                } else {
+                    sessionHosts.values.forEach { host ->
+                        host.webView.settings.textZoom = textZoomLevel
+                        applyTextZoomToWebView(host.webView)
+                    }
+                }
                 dispatchToVue("sfz-text-zoom-changed", """{"level": $textZoomLevel}""")
                 dbg("[zoom] level=$textZoomLevel net=${currentNetworkId ?: "?"}")
             }
@@ -3436,9 +3963,10 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
      * Used from the blocked page to give the user a fresh start.
      */
     private fun clearCookiesAndRetry(view: WebView, retryUrl: String) {
-        val cm = CookieManager.getInstance()
+        val sessionKey = currentAccountId
+        val cm = sessionKey?.let { profileCookieManagerForSession(it) } ?: CookieManager.getInstance()
         // Wipe the saved cookie data for this session key so stale Akamai cookies don't persist
-        currentAccountId?.let { key ->
+        sessionKey?.let { key ->
             val editor = cookiePrefs.edit()
             for (url in COOKIE_URLS) {
                 editor.remove("${key}|$url")
@@ -3609,14 +4137,12 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
             dismissPopupMenu()
             if (net.id != currentNetworkId) {
                 dbg("⇄ SWITCH ${currentNetworkId} → ${net.id}")
-                val webView = socialWebView ?: return@setOnClickListener
                 val oldKey = currentAccountId
                 if (oldKey.isNullOrBlank()) {
                     Log.w(TAG, "Blocked network switch: active session unavailable")
                     return@setOnClickListener
                 }
 
-                saveCookiesForSession(oldKey)
                 val oldSession = parseSessionIdentity(oldKey, currentNetworkId)
                 if (oldSession == null) {
                     Log.w(TAG, "Blocked network switch: could not resolve active session")
@@ -3628,24 +4154,15 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
                     return@setOnClickListener
                 }
 
-                prepareSessionBeforeLoad(
-                    webView,
-                    newSession,
-                    net.url,
-                    getDeclaredStorageOrigins(newSession)
-                ) { _ ->
-                    initialBackIndex = -1
-                    isLoggedIn = false; pagesSinceOpen = 0
-                    if (net.id == "facebook") {
-                        facebookDesktopOverride = false
+                switchToSession(
+                    targetSession = newSession,
+                    targetUrl = net.url,
+                    loadIfMissing = true,
+                    declaredStorageOrigins = getDeclaredStorageOrigins(newSession),
+                ) { shown, _ ->
+                    if (!shown) {
+                        Log.w(TAG, "Blocked network switch: target host unavailable")
                     }
-                    applyUaForNetwork(net.id, net.url)
-                    dbg("  loadUrl: ${net.url}")
-                    webView.loadUrl(net.url)
-                    currentAccountId = newSession.sessionKey
-                    currentNetworkId = net.id
-                    incrementUsage(net.id)
-                    updateBottomBarActiveNetwork(net.id)
                 }
             }
         }
@@ -3760,14 +4277,12 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
             dismissPopupMenu()
             if (net.id != currentNetworkId) {
                 dbg("⇄ SWITCH ${currentNetworkId} → ${net.id} (threads btn)")
-                val webView = socialWebView ?: return@setOnClickListener
                 val oldKey = currentAccountId
                 if (oldKey.isNullOrBlank()) {
                     Log.w(TAG, "Blocked network switch: active session unavailable")
                     return@setOnClickListener
                 }
 
-                saveCookiesForSession(oldKey)
                 val oldSession = parseSessionIdentity(oldKey, currentNetworkId)
                 if (oldSession == null) {
                     Log.w(TAG, "Blocked network switch: could not resolve active session")
@@ -3779,21 +4294,15 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
                     return@setOnClickListener
                 }
 
-                prepareSessionBeforeLoad(
-                    webView,
-                    newSession,
-                    net.url,
-                    getDeclaredStorageOrigins(newSession)
-                ) { _ ->
-                    initialBackIndex = -1
-                    isLoggedIn = false; pagesSinceOpen = 0
-                    applyUaForNetwork(net.id, net.url)
-                    dbg("  loadUrl: ${net.url}")
-                    webView.loadUrl(net.url)
-                    currentAccountId = newSession.sessionKey
-                    currentNetworkId = net.id
-                    incrementUsage(net.id)
-                    updateBottomBarActiveNetwork(net.id)
+                switchToSession(
+                    targetSession = newSession,
+                    targetUrl = net.url,
+                    loadIfMissing = true,
+                    declaredStorageOrigins = getDeclaredStorageOrigins(newSession),
+                ) { shown, _ ->
+                    if (!shown) {
+                        Log.w(TAG, "Blocked network switch: target host unavailable")
+                    }
                 }
             }
         }
@@ -3873,8 +4382,18 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
 
     // ── WebView factory ───────────────────────────────────────────────────────
 
-    private fun createWebView(): WebView {
+    private fun createWebView(profileName: String): WebView {
         val webView = WebView(activity)
+        if (isPoolingEnabled()) {
+            try {
+                WebViewCompat.setProfile(webView, profileName)
+            } catch (e: Exception) {
+                disableMultiProfilePooling = true
+                disablePoolingAndDestroyInactiveHosts()
+                Log.w(TAG, "Session isolation degraded: MULTI_PROFILE setProfile failed")
+                dbg("android-webview mode=fallback-single-webview (setProfile failed)")
+            }
+        }
         val settings = webView.settings
         applyNativeNightMode()
         settings.javaScriptEnabled = true
@@ -3894,9 +4413,13 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
         val defaultUa = WebSettings.getDefaultUserAgent(activity)
         mobileUa = defaultUa.replace("; wv", "")
         settings.userAgentString = mobileUa
-        applyDarkModeToWebView(webView)
 
-        val cookieManager = CookieManager.getInstance()
+        val cookieManager = if (isPoolingEnabled()) {
+            runCatching { WebViewCompat.getProfile(webView).cookieManager }
+                .getOrElse { CookieManager.getInstance() }
+        } else {
+            CookieManager.getInstance()
+        }
         cookieManager.setAcceptCookie(true)
         cookieManager.setAcceptThirdPartyCookies(webView, true)
 
@@ -3917,6 +4440,7 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
+                if (isInactiveManagedCallback(view)) return
                 darkModeReapplyGeneration += 1
             }
 
@@ -3925,6 +4449,9 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
                 val scheme = request.url.scheme ?: ""
                 val host = request.url.host ?: ""
                 val path = request.url.path ?: ""
+                if (isInactiveManagedCallback(view)) {
+                    return scheme != "http" && scheme != "https"
+                }
                 dbg("[nav] net=${currentNetworkId ?: "?"} scheme=$scheme host=$host path=$path url=$url")
 
                 // Allow normal web navigation — but intercept app store redirects
@@ -3970,6 +4497,7 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
             }
             override fun onReceivedHttpError(view: WebView, request: android.webkit.WebResourceRequest, errorResponse: android.webkit.WebResourceResponse) {
                 super.onReceivedHttpError(view, request, errorResponse)
+                if (isInactiveManagedCallback(view)) return
                 // Only handle main frame navigation (not sub-resources like images/scripts)
                 if (request.isForMainFrame && errorResponse.statusCode == 403) {
                     showBlockedPage(view, request.url.toString())
@@ -3977,6 +4505,14 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
             }
             override fun onPageFinished(view: WebView, url: String) {
                 super.onPageFinished(view, url)
+                if (isInactiveManagedCallback(view)) {
+                    hostForWebView(view)?.let { host ->
+                        if (host.initialBackIndex < 0) {
+                            host.initialBackIndex = view.copyBackForwardList().currentIndex
+                        }
+                    }
+                    return
+                }
                 dbg("[page] finished net=${currentNetworkId ?: "?"} ua=${if (shouldUseDesktopUa(currentNetworkId, url)) "desktop" else "mobile"} url=$url")
                 applyTextZoomToWebView(view)
                 // Fallback: inject scripts here only if addDocumentStartJavaScript wasn't available
@@ -4071,6 +4607,7 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
                 if (initialBackIndex < 0) {
                     initialBackIndex = view.copyBackForwardList().currentIndex
                 }
+                hostForWebView(view)?.let { syncHostFromGlobals(it) }
             }
         }
         webView.webChromeClient = object : WebChromeClient() {
@@ -4140,10 +4677,24 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
             // "impossible d'établir une connexion avec le service Recaptcha".
             override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean {
                 val childWebView = WebView(activity)
+                if (isPoolingEnabled()) {
+                    try {
+                        val parentProfile = WebViewCompat.getProfile(view)
+                        WebViewCompat.setProfile(childWebView, parentProfile.name)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Session isolation degraded: child WebView profile unavailable")
+                    }
+                }
                 childWebView.settings.javaScriptEnabled = true
                 childWebView.settings.domStorageEnabled = true
                 childWebView.settings.userAgentString = view.settings.userAgentString
-                CookieManager.getInstance().setAcceptThirdPartyCookies(childWebView, true)
+                val childCookieManager = if (isPoolingEnabled()) {
+                    runCatching { WebViewCompat.getProfile(childWebView).cookieManager }
+                        .getOrElse { CookieManager.getInstance() }
+                } else {
+                    CookieManager.getInstance()
+                }
+                childCookieManager.setAcceptThirdPartyCookies(childWebView, true)
                 childWebView.webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(v: WebView, request: android.webkit.WebResourceRequest): Boolean {
                         // reCAPTCHA callback — load result in the parent WebView
@@ -4175,33 +4726,34 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
     // ── Visibility helpers ────────────────────────────────────────────────────
 
     private fun showSocialView() {
+        val host = activeHost()
+        if (host != null) {
+            showHostInternal(host)
+            return
+        }
         socialRoot?.visibility = View.VISIBLE
     }
 
     private fun hideSocialView() {
+        val host = activeHost()
+        if (host != null) {
+            hideHostInternal(host)
+            return
+        }
         socialRoot?.visibility = View.GONE
     }
 
     private fun destroySocialView() {
-        // Save cookies for the current session before destroying
-        currentAccountId?.let { saveCookiesForSession(it) }
-
-        dismissPopupMenu()
-        backCallback?.remove()
-        backCallback = null
-        socialWebView?.let { webView ->
-            resetStorageIsolationHooks(webView)
-            webView.destroy()
+        val activeKey = activeHostSessionKey
+        if (activeKey != null) {
+            destroyHost(activeKey, "destroy-social-view")
+            return
         }
-        socialRoot?.let { (it.parent as? ViewGroup)?.removeView(it) }
-        socialWebView = null
-        socialRoot = null
-        bottomBarView = null
-        currentAccountId = null
-        currentNetworkId = null
-        activeSessionIdentity = null
-        localStorageScriptHandler = null
-        localStorageRestoreActive = false
-        localStorageCaptureActive = false
+
+        val allKeys = sessionHosts.keys.toList()
+        for (key in allKeys) {
+            destroyHost(key, "destroy-social-view-all")
+        }
+        clearGlobalActivePointers()
     }
 }

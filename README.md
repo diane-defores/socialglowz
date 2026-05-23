@@ -108,11 +108,13 @@ SocialGlowz affiche des réseaux sociaux dans des WebViews natives et injecte de
   - sinon retour login obligatoire.
 - L'écran d'erreur de bootstrap auth n'injecte plus le message via `innerHTML` (rendu DOM via `textContent`).
 - Sur Android, les WebViews natives isolent les sessions par profil et réseau avec la clé `${profileId}-${networkId}`:
+  - quand Android WebKit `MULTI_PROFILE` est disponible, chaque session utilise un profil WebKit natif distinct et peut rester chaude dans un pool borné,
   - cookies et snapshots `localStorage` sont persistés par origine,
   - CinderReels déclare explicitement `https://cinderreels.com` car son auth utilise `localStorage`,
   - les autres réseaux utilisent le même mécanisme via l'origine de leur URL principale,
   - les origins additionnelles servent aux réseaux dont l'auth ou l'app passe par plusieurs domaines.
-- Limites connues: IndexedDB, CacheStorage, service workers, cache HTTP global WebView et credential store système ne sont pas isolés par ce mécanisme.
+- Fallback Android: si `MULTI_PROFILE` n'est pas supporté par le WebView du device, l'app revient au mode single-WebView avec snapshots cookies/localStorage; le multi-WebView chaud n'est pas activé.
+- Limites connues du fallback: IndexedDB, CacheStorage, service workers, cache HTTP global WebView et credential store système ne sont pas isolés par les snapshots.
 - Détails: [shipflow_data/technical/android-webview-session-isolation.md](shipflow_data/technical/android-webview-session-isolation.md).
 
 ## Variables d'environnement

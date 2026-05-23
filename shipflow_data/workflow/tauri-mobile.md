@@ -46,6 +46,20 @@ CinderReels is the reference manual test because its authentication uses localSt
 
 Known limits for this Android WebView isolation: IndexedDB, CacheStorage, service workers, global WebView HTTP cache and system credential stores are not covered.
 
+## Android WebView fast-switching QA
+
+For WebView pooling checks, also use the GitHub Actions / Blacksmith APK. Local browser or desktop tests do not prove the Android WebKit profile behavior.
+
+1. Install a clean `socialglowz-android-debug` artifact.
+2. Open Profile A -> Instagram and wait for full load.
+3. Switch to another network, then return to Instagram; if `MULTI_PROFILE` is active, the original host should reappear warm without a visible full reload.
+4. Open Profile B -> Instagram and confirm Profile A's account is not visible.
+5. Repeat with CinderReels because its authentication uses `localStorage`.
+6. Open more than three warm sessions and verify older hidden sessions can reload after LRU eviction without leaking another session.
+7. Check logcat/debug logs for `android-webview mode=multi-profile` or explicit fallback `android-webview mode=fallback-single-webview`.
+
+If the device logs fallback mode, performance expectations are lower: only the current single WebView can be safely reused because the process-global cookie jar prevents safe multi-WebView pooling.
+
 ## Windows desktop test workflow
 
 To test on Windows without building locally:

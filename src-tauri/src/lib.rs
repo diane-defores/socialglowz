@@ -752,26 +752,31 @@ fn close_webview(app: AppHandle, profile_id: String, network_id: String) -> Resu
         .map_err(|e| e.to_string())
 }
 
-// Android: pooling not yet implemented — hide/show fall back to close/open behavior
+// Android: keep/show live Kotlin WebView hosts when the native plugin can pool them.
 #[tauri::command]
 #[cfg(target_os = "android")]
 fn hide_webview(app: AppHandle, profile_id: String, network_id: String) -> Result<(), String> {
-    close_webview(app, profile_id, network_id)
+    let session_key = format!("{}-{}", profile_id, network_id);
+    app.android_webview()
+        .hide(&session_key)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 #[cfg(target_os = "android")]
 fn show_webview(
-    _app: AppHandle,
-    _profile_id: String,
-    _network_id: String,
+    app: AppHandle,
+    profile_id: String,
+    network_id: String,
     _x: f64,
     _y: f64,
     _width: f64,
     _height: f64,
 ) -> Result<bool, String> {
-    // Always return false on Android — caller will fall through to open_webview
-    Ok(false)
+    let session_key = format!("{}-{}", profile_id, network_id);
+    app.android_webview()
+        .show(&session_key)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
