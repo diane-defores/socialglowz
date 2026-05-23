@@ -1,12 +1,12 @@
 ---
 artifact: spec
 metadata_schema_version: "1.0"
-artifact_version: "1.0.1"
+artifact_version: "1.0.2"
 project: "socialglowz"
 created: "2026-05-22"
 created_at: "2026-05-22 15:55:00 UTC"
 updated: "2026-05-23"
-updated_at: "2026-05-23 18:43:53 UTC"
+updated_at: "2026-05-23 19:00:22 UTC"
 status: ready
 source_skill: sf-spec
 source_model: "gpt-5.5"
@@ -326,6 +326,7 @@ None.
 | 2026-05-23 17:09:00 UTC | sf-redact | gpt-5.5 medium | Created a technophile FAQ draft for Android WebView session isolation. | draft | Decide whether the draft stays contributor-only or becomes public FAQ content. |
 | 2026-05-23 17:10:00 UTC | sf-docs | gpt-5.5 medium | Added README summary, technical context link, mobile QA notes, and a dedicated Android WebView session isolation explainer. | documented | Review and ship docs when approved. |
 | 2026-05-23 18:43:53 UTC | sf-content | GPT-5 Codex | Promoted the technophile draft into a public Astro blog article and updated the editorial content map. | implemented | Content build and metadata validation passed; run ship when the wider docs/content scope is ready. |
+| 2026-05-23 19:00:22 UTC | sf-ship | GPT-5 Codex | Quick-shipped the Android WebView isolation docs and public blog article to `origin/master`. | shipped | None. |
 
 ## Current Chantier Flow
 
