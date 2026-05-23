@@ -4,7 +4,7 @@ metadata_schema_version: "1.0"
 artifact_version: "1.0.0"
 project: "socialglowz"
 created: "2026-04-26"
-updated: "2026-04-27"
+updated: "2026-05-22"
 status: reviewed
 source_skill: sf-docs
 scope: context
@@ -106,6 +106,7 @@ SocialGlowz est une application social multi-canaux avec une base Vue 3 commune 
 - Sync cloud : `src/lib/cloudSyncQueue.ts`, `src/lib/cloudSettings.ts`, `src/lib/cloudSync.ts`.
 - Backend : tables Convex (`users`, `socialAccounts`, `activeAccounts`, `settings`, `profiles`, `customLinks`, `friendsFilters`, `subscriptions`).
 - Android WebView (plugin natif) : cookies + snapshots `localStorage` persistés par session `${profileId}-${networkId}` et par origin, avec mode dégradé explicite si `DOCUMENT_START_SCRIPT` ou `WEB_MESSAGE_LISTENER` ne sont pas disponibles.
+- Les origins additionnelles où l'isolation scriptée s'applique sont déclarées côté front dans `src/config/socialNetworks.ts` puis transmises à `open_webview` et `set_bar_networks` (validation HTTPS/allowlist côté Rust Android), afin de couvrir aussi les switches natifs de la bottom bar Android.
 - Non couvert par cette isolation Android : IndexedDB, CacheStorage, service workers, HTTP cache WebView global, et credential stores système.
 
 ### 4) Extension surfaces

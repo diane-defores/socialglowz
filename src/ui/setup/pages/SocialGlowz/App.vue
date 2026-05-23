@@ -44,6 +44,7 @@ import { useI18n } from 'vue-i18n'
 import { useThemeStore } from '@/stores/theme'
 import { useWebviewStore, WEBVIEW_URLS } from '@/stores/webviewState'
 import { useProfilesStore } from '@/stores/profiles'
+import { getNetworkIsolationOriginsByNetwork } from '@/config/socialNetworks'
 import { isAuthenticated } from '@/lib/convexAuth'
 import { hydrateCloudState, resetCloudSyncState } from '@/lib/cloudSync'
 import { syncSettingsPatch } from '@/lib/cloudSettings'
@@ -247,7 +248,10 @@ watch(
     const visibleIds = Object.keys(WEBVIEW_URLS)
       .filter(id => !profilesStore.isNetworkHidden(profileId, id))
     const { invoke } = await import('@tauri-apps/api/core')
-    invoke('set_bar_networks', { networkIds: visibleIds }).catch(() => {})
+    invoke('set_bar_networks', {
+      networkIds: visibleIds,
+      storageOriginsByNetwork: getNetworkIsolationOriginsByNetwork(visibleIds),
+    }).catch(() => {})
   },
   { immediate: true },
 )

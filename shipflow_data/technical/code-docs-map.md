@@ -4,7 +4,7 @@ metadata_schema_version: "1.0"
 artifact_version: "1.0.0"
 project: "socialglowz"
 created: "2026-05-14"
-updated: "2026-05-14"
+updated: "2026-05-22"
 status: active
 source_skill: sf-docs
 scope: code_docs_map
@@ -73,3 +73,21 @@ next_step: "/sf-docs maintain shipflow_data/technical/code-docs-map.md"
   - Auth bootstrap error screen message is rendered with `textContent`, not interpolated `innerHTML`.
 - Docs:
   - `README.md`
+
+## Android WebView storage isolation matrix
+
+- Code:
+  - `src/config/socialNetworks.ts`
+  - `src/ui/setup/pages/SocialGlowz/composables/useNetworkWebview.ts`
+  - `src/ui/setup/pages/SocialGlowz/composables/useWebviewPreload.ts`
+  - `src-tauri/src/lib.rs`
+  - `src-tauri/plugins/android-webview/src/mobile.rs`
+  - `src-tauri/plugins/android-webview/android/src/main/java/com/socialglowz/webview/NativeWebViewPlugin.kt`
+- Behavior:
+  - Une matrice déclarative définit la politique d'isolation (par défaut `cookies` + `localStorage`, non-couverture `sessionStorage`/`IndexedDB`/`CacheStorage`/`serviceWorker`) et les origins additionnelles par réseau.
+  - Le front passe `storageOrigins` à `open_webview` pour ouverture normale/preload et `storageOriginsByNetwork` à `set_bar_networks` pour les switches de la bottom bar native.
+  - Rust Android valide/normalise ces origins (HTTPS + host autorisé par réseau + réseau visible pour la bottom bar) puis les transmet au plugin mobile.
+  - Le plugin Kotlin élargit `allowedOrigins` des hooks globaux d'isolation stockage sans branche réseau spécifique, y compris lors d'un changement de réseau piloté uniquement côté natif.
+- Docs:
+  - `shipflow_data/technical/context.md`
+  - `shipflow_data/workflow/specs/android-webview-storage-isolation.md`

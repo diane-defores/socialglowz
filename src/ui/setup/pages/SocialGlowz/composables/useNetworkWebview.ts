@@ -1,5 +1,6 @@
 import { ref, watch, onUnmounted, type Ref } from 'vue'
 import { useElementBounding } from '@vueuse/core'
+import { getNetworkIsolationOrigins } from '@/config/socialNetworks'
 
 const isTauri = () =>
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
@@ -39,10 +40,12 @@ export function useNetworkWebview(hostEl: Ref<HTMLElement | null>) {
   })
 
   async function open(url: string, profileId: string, networkId: string) {
+    const storageOrigins = getNetworkIsolationOrigins(networkId)
     await invoke('open_webview', {
       url,
       profileId,
       networkId,
+      storageOrigins,
       x: x.value,
       y: y.value,
       width: width.value,
@@ -76,10 +79,12 @@ export function useNetworkWebview(hostEl: Ref<HTMLElement | null>) {
 
     if (!shown) {
       // First time opening this network — create a fresh webview
+      const storageOrigins = getNetworkIsolationOrigins(networkId)
       await invoke('open_webview', {
         url,
         profileId,
         networkId,
+        storageOrigins,
         x: x.value,
         y: y.value,
         width: width.value,

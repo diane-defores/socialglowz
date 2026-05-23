@@ -1,5 +1,6 @@
 import { WEBVIEW_URLS } from '@/stores/webviewState'
 import { useProfilesStore } from '@/stores/profiles'
+import { getNetworkIsolationOrigins } from '@/config/socialNetworks'
 
 const isTauri = () =>
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
@@ -42,6 +43,7 @@ export async function preloadWebviews() {
         url: WEBVIEW_URLS[networkId],
         profileId,
         networkId,
+        storageOrigins: getNetworkIsolationOrigins(networkId),
         x: -10000,
         y: -10000,
         width: 0,

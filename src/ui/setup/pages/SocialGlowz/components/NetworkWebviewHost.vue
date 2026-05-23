@@ -26,6 +26,7 @@
 import { ref, computed, watch } from 'vue'
 import { useWebviewStore, WEBVIEW_URLS } from '@/stores/webviewState'
 import { useProfilesStore } from '@/stores/profiles'
+import { getNetworkIsolationOriginsByNetwork } from '@/config/socialNetworks'
 import { useNetworkWebview } from '../composables/useNetworkWebview'
 
 const webviewStore = useWebviewStore()
@@ -52,7 +53,10 @@ async function syncBarNetworks() {
   const visibleIds = allWebviewIds.filter(id => !profilesStore.isNetworkHidden(profileId, id))
   try {
     const { invoke } = await import('@tauri-apps/api/core')
-    await invoke('set_bar_networks', { networkIds: visibleIds })
+    await invoke('set_bar_networks', {
+      networkIds: visibleIds,
+      storageOriginsByNetwork: getNetworkIsolationOriginsByNetwork(visibleIds),
+    })
   } catch { /* no-op on desktop */ }
 }
 

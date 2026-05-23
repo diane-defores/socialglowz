@@ -1,12 +1,12 @@
 ---
 artifact: spec
 metadata_schema_version: "1.0"
-artifact_version: "0.3.0"
+artifact_version: "0.3.1"
 project: "socialglowz"
 created: "2026-05-22"
 created_at: "2026-05-22 15:55:00 UTC"
 updated: "2026-05-22"
-updated_at: "2026-05-22 16:20:00 UTC"
+updated_at: "2026-05-22 21:12:00 UTC"
 status: ready
 source_skill: sf-spec
 source_model: "gpt-5.5"
@@ -318,6 +318,7 @@ None.
 | 2026-05-22 16:02:00 UTC | sf-ready | GPT-5 Codex | Reviewed structure, metadata, security scope, docs freshness, Android dependency paths, validation commands, and acceptance criteria. | ready | /sf-start shipflow_data/workflow/specs/android-webview-storage-isolation.md |
 | 2026-05-22 16:10:00 UTC | sf-start | gpt-5.3-codex | Implemented Android cookie sequencing, per-session localStorage isolation, backup/delete wiring, labels, and technical docs. | implemented | /sf-verify shipflow_data/workflow/specs/android-webview-storage-isolation.md |
 | 2026-05-22 16:20:00 UTC | sf-verify | GPT-5 Codex | Ran local checks and reviewed security/session diff; Android generated-project build and device CinderReels QA unavailable in this workspace. | partial | Run Android build from generated project or CI, then device QA for CinderReels A/B/A, delete, and backup/restore. |
+| 2026-05-22 21:12:00 UTC | sf-build | GPT-5 Codex | Extended implementation with declarative per-network isolation matrix (`storageOrigins`) from TS config to Rust/Kotlin, including Android validation/allowlist forwarding, bottom bar propagation, and focused Vitest coverage. | partial | Rust system deps, Android generated-project build, and device QA still required before close/ship. |
 
 ## Current Chantier Flow
 
@@ -325,7 +326,7 @@ None.
 |------|--------|-------|
 | sf-spec | reviewed | Spec created as `shipflow_data/workflow/specs/android-webview-storage-isolation.md`. |
 | sf-ready | ready | Spec corrected and accepted for delegated sequential implementation. |
-| sf-start | implemented | Android native/session implementation, backup wiring, labels, and technical doc update are complete in the working tree. |
-| sf-verify | partial | `pnpm typecheck`, `pnpm test:once`, `pnpm tauri:build`, `git diff --check`, and targeted static checks passed; `pnpm tauri:android:build` is blocked because `src-tauri/gen/android` is absent, and device/emulator CinderReels QA was not run. |
+| sf-start | implemented | Android native/session implementation now inclut la matrice déclarative `storageOrigins`/`storageOriginsByNetwork` (TS -> Rust -> plugin mobile) sans branche réseau spécifique, y compris pour la bottom bar native. |
+| sf-verify | partial | `pnpm typecheck`, `pnpm test:once`, `pnpm tauri:build`, `git diff --check`, and targeted static checks pass; `cargo check` is blocked because `pkg-config` is absent, `pnpm tauri:android:build` is blocked because `src-tauri/gen/android` is absent, and device/emulator CinderReels QA was not run. |
 | sf-end | blocked | Do not close until Android build/device proof is collected or risk is explicitly accepted. |
 | sf-ship | blocked | Do not ship until Android build/device proof is collected or risk is explicitly accepted. |

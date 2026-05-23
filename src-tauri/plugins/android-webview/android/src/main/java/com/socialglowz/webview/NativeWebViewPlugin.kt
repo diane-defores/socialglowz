@@ -71,6 +71,7 @@ class OpenWebViewArgs {
     var url: String = ""
     var accountId: String = ""
     var networkId: String = ""
+    var storageOrigins: ArrayList<String> = arrayListOf()
 }
 
 @InvokeArg
@@ -107,6 +108,7 @@ class NavigateArgs {
 @InvokeArg
 class BarNetworksArgs {
     var networkIds: ArrayList<String> = arrayListOf()
+    var storageOriginsByNetworkJson: String = "{}"
 }
 
 @InvokeArg
@@ -890,6 +892,8 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
     private var localStorageScriptHandler: ScriptHandler? = null
     private var localStorageRestoreActive = false
     private var localStorageCaptureActive = false
+    private val declaredStorageOriginsByNetwork = mutableMapOf<String, Set<String>>()
+    private val declaredStorageOriginsBySession = mutableMapOf<String, Set<String>>()
 
     // Back-stack baseline — set after the initial page+redirects settle.
     // canGoBack() returns true for redirect-created entries too, so we only treat
@@ -1189,6 +1193,73 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
         return originFromUrl(raw)
     }
 
+    private fun normalizeDeclaredStorageOrigins(origins: Collection<String>?): Set<String> {
+        if (origins.isNullOrEmpty()) return emptySet()
+        val normalized = linkedSetOf<String>()
+        for (rawOrigin in origins) {
+            val origin = originFromUrl(rawOrigin) ?: continue
+            if (!origin.startsWith("https://")) continue
+            normalized.add(origin)
+        }
+        return normalized
+    }
+
+    private fun getDeclaredStorageOrigins(session: SessionIdentity): Set<String> {
+        return declaredStorageOriginsBySession[session.sessionKey]
+            ?: declaredStorageOriginsByNetwork[session.networkId]
+            ?: emptySet()
+    }
+
+    private fun setDeclaredStorageOrigins(session: SessionIdentity, origins: Collection<String>?) {
+        val normalized = normalizeDeclaredStorageOrigins(origins)
+        if (normalized.isEmpty()) {
+            declaredStorageOriginsBySession.remove(session.sessionKey)
+            return
+        }
+        declaredStorageOriginsBySession[session.sessionKey] = normalized
+        declaredStorageOriginsByNetwork[session.networkId] = normalized
+    }
+
+    private fun setDeclaredStorageOriginsByNetworkJson(rawJson: String) {
+        val next = mutableMapOf<String, Set<String>>()
+        try {
+            val payload = JSONObject(rawJson.ifBlank { "{}" })
+            val keys = payload.keys()
+            while (keys.hasNext()) {
+                val networkId = keys.next()
+                if (!isKnownNetworkId(networkId)) continue
+                val rawOrigins = payload.optJSONArray(networkId) ?: continue
+                val origins = mutableListOf<String>()
+                for (i in 0 until rawOrigins.length()) {
+                    rawOrigins.optString(i, "").takeIf { it.isNotBlank() }?.let { origins.add(it) }
+                }
+                val normalized = normalizeDeclaredStorageOrigins(origins)
+                if (normalized.isNotEmpty()) {
+                    next[networkId] = normalized
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Ignored invalid storage origin matrix for bottom bar", e)
+            return
+        }
+
+        declaredStorageOriginsByNetwork.clear()
+        declaredStorageOriginsByNetwork.putAll(next)
+    }
+
+    private fun removeDeclaredStorageOriginsForSession(sessionKey: String) {
+        declaredStorageOriginsBySession.remove(sessionKey)
+    }
+
+    private fun removeDeclaredStorageOriginsForProfile(profileId: String) {
+        val keysToRemove = declaredStorageOriginsBySession.keys.filter { key ->
+            parseSessionIdentity(key)?.profileId == profileId
+        }
+        for (key in keysToRemove) {
+            declaredStorageOriginsBySession.remove(key)
+        }
+    }
+
     private fun localStoragePrefKey(sessionKey: String, origin: String): String {
         return "$sessionKey|$origin"
     }
@@ -1481,6 +1552,7 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
         webView: WebView,
         session: SessionIdentity,
         targetUrl: String,
+        declaredStorageOrigins: Collection<String> = emptyList(),
     ) {
         val targetOrigin = originFromUrl(targetUrl)
         resetStorageIsolationHooks(webView)
@@ -1493,6 +1565,9 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
         val allowedOrigins = mutableSetOf<String>()
         allowedOrigins.add(targetOrigin)
         for (origin in loadStoredOriginsForSession(session.sessionKey)) {
+            originFromUrl(origin)?.let { allowedOrigins.add(it) }
+        }
+        for (origin in declaredStorageOrigins) {
             originFromUrl(origin)?.let { allowedOrigins.add(it) }
         }
 
@@ -1534,6 +1609,7 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
         webView: WebView,
         session: SessionIdentity,
         targetUrl: String,
+        declaredStorageOrigins: Collection<String> = emptyList(),
         onReady: (Boolean) -> Unit,
     ) {
         activeSessionIdentity = session
@@ -1541,7 +1617,7 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
             if (!cookiesRestored) {
                 Log.w(TAG, "Session isolation degraded: cookie restore did not complete cleanly")
             }
-            configureStorageIsolationForNavigation(webView, session, targetUrl)
+            configureStorageIsolationForNavigation(webView, session, targetUrl, declaredStorageOrigins)
             onReady(cookiesRestored)
         }
     }
@@ -2161,6 +2237,8 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
             invoke.reject("Invalid Android session key")
             return
         }
+        setDeclaredStorageOrigins(session, args.storageOrigins)
+        val declaredStorageOrigins = getDeclaredStorageOrigins(session)
 
         incrementUsage(session.networkId)
         dbg("▶ OPEN webview: network=${session.networkId} url=${args.url}")
@@ -2180,7 +2258,12 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
                     return@runOnUiThread
                 }
 
-                prepareSessionBeforeLoad(webView, session, args.url) { cookiesRestored ->
+                prepareSessionBeforeLoad(
+                    webView,
+                    session,
+                    args.url,
+                    declaredStorageOrigins
+                ) { cookiesRestored ->
                     initialBackIndex = -1  // Reset baseline for new network URL
                     isLoggedIn = false; pagesSinceOpen = 0  // Re-check auth on new network
                     if (session.networkId == "facebook") {
@@ -2276,7 +2359,12 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
                 facebookStoryNoticeShown = false
             }
 
-            prepareSessionBeforeLoad(webView, session, args.url) { cookiesRestored ->
+            prepareSessionBeforeLoad(
+                webView,
+                session,
+                args.url,
+                declaredStorageOrigins
+            ) { cookiesRestored ->
                 applyUaForNetwork(session.networkId, args.url)
                 webView.loadUrl(args.url)
                 val result = JSObject()
@@ -2563,6 +2651,7 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
         val args = invoke.parseArgs(BarNetworksArgs::class.java)
         activity.runOnUiThread {
             visibleNetworkIds = if (args.networkIds.isEmpty()) null else args.networkIds.toSet()
+            setDeclaredStorageOriginsByNetworkJson(args.storageOriginsByNetworkJson)
             rebuildBottomBar()
         }
         invoke.resolve(JSObject())
@@ -2610,6 +2699,7 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
         }
         editor.apply()
         removeLocalStorageSnapshotsForSession(sessionKey)
+        removeDeclaredStorageOriginsForSession(sessionKey)
         // Re-arm cookie consent if deleting the currently active session
         if (currentAccountId == sessionKey) {
             isLoggedIn = false
@@ -2637,6 +2727,7 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
         }
         editor.apply()
         removeLocalStorageSnapshotsForProfile(profileId)
+        removeDeclaredStorageOriginsForProfile(profileId)
         // Re-arm cookie consent if deleting the currently active profile
         if (currentAccountId?.let { parseSessionIdentity(it)?.profileId == profileId } == true) {
             isLoggedIn = false
@@ -3537,7 +3628,12 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
                     return@setOnClickListener
                 }
 
-                prepareSessionBeforeLoad(webView, newSession, net.url) { _ ->
+                prepareSessionBeforeLoad(
+                    webView,
+                    newSession,
+                    net.url,
+                    getDeclaredStorageOrigins(newSession)
+                ) { _ ->
                     initialBackIndex = -1
                     isLoggedIn = false; pagesSinceOpen = 0
                     if (net.id == "facebook") {
@@ -3683,7 +3779,12 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
                     return@setOnClickListener
                 }
 
-                prepareSessionBeforeLoad(webView, newSession, net.url) { _ ->
+                prepareSessionBeforeLoad(
+                    webView,
+                    newSession,
+                    net.url,
+                    getDeclaredStorageOrigins(newSession)
+                ) { _ ->
                     initialBackIndex = -1
                     isLoggedIn = false; pagesSinceOpen = 0
                     applyUaForNetwork(net.id, net.url)

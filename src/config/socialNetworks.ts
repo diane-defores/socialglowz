@@ -327,3 +327,95 @@ export const builtInSocialNetworks: BuiltInSocialNetwork[] = [
     defaultSelected: false,
   },
 ]
+
+const NETWORK_ISOLATION_NOT_COVERED = [
+  'sessionStorage',
+  'indexedDB',
+  'cacheStorage',
+  'serviceWorker',
+  'httpCache',
+  'credentialStore',
+] as const
+
+const NETWORK_ISOLATION_AUTH_STORAGE = ['cookies', 'localStorage'] as const
+
+export type NetworkIsolationNotCovered = (typeof NETWORK_ISOLATION_NOT_COVERED)[number]
+export type NetworkIsolationAuthStorage = (typeof NETWORK_ISOLATION_AUTH_STORAGE)[number]
+
+export type NetworkIsolationPolicy = {
+  authStorage: readonly NetworkIsolationAuthStorage[]
+  storageOrigins: readonly string[]
+  notCovered: readonly NetworkIsolationNotCovered[]
+  notes?: string
+}
+
+type NetworkIsolationPolicyOverride = {
+  authStorage?: readonly NetworkIsolationAuthStorage[]
+  storageOrigins?: readonly string[]
+  notCovered?: readonly NetworkIsolationNotCovered[]
+  notes?: string
+}
+
+const NETWORK_ISOLATION_DEFAULT: NetworkIsolationPolicy = {
+  authStorage: NETWORK_ISOLATION_AUTH_STORAGE,
+  storageOrigins: [],
+  notCovered: NETWORK_ISOLATION_NOT_COVERED,
+}
+
+const NETWORK_ISOLATION_OVERRIDES: Readonly<Record<string, NetworkIsolationPolicyOverride>> = {
+  cinderreels: {
+    authStorage: ['cookies', 'localStorage'],
+    storageOrigins: ['https://cinderreels.com'],
+  },
+}
+
+function normalizeHttpsOrigin(raw: string): string | null {
+  try {
+    const parsed = new URL(raw)
+    if (parsed.protocol !== 'https:') return null
+    const host = parsed.hostname.toLowerCase()
+    if (!host) return null
+    const isDefaultPort = !parsed.port || parsed.port === '443'
+    return isDefaultPort ? `https://${host}` : `https://${host}:${parsed.port}`
+  } catch {
+    return null
+  }
+}
+
+function uniqueOrigins(origins: readonly string[]): string[] {
+  const deduped = new Set<string>()
+  for (const origin of origins) {
+    const normalized = normalizeHttpsOrigin(origin)
+    if (normalized) deduped.add(normalized)
+  }
+  return Array.from(deduped)
+}
+
+export function getNetworkIsolationPolicy(networkId: string): NetworkIsolationPolicy {
+  const override = NETWORK_ISOLATION_OVERRIDES[networkId]
+  return {
+    authStorage: override?.authStorage ?? NETWORK_ISOLATION_DEFAULT.authStorage,
+    storageOrigins: uniqueOrigins(override?.storageOrigins ?? NETWORK_ISOLATION_DEFAULT.storageOrigins),
+    notCovered: override?.notCovered ?? NETWORK_ISOLATION_DEFAULT.notCovered,
+    notes: override?.notes,
+  }
+}
+
+export function getNetworkIsolationOrigins(networkId: string): string[] {
+  const networkUrl = builtInSocialNetworks.find((network) => network.id === networkId)?.url
+  const baseOrigins = networkUrl ? [networkUrl] : []
+  const policy = getNetworkIsolationPolicy(networkId)
+  return uniqueOrigins([...baseOrigins, ...policy.storageOrigins])
+}
+
+export function getNetworkIsolationOriginsByNetwork(
+  networkIds: readonly string[],
+): Record<string, string[]> {
+  return networkIds.reduce<Record<string, string[]>>((originsByNetwork, networkId) => {
+    const origins = getNetworkIsolationOrigins(networkId)
+    if (origins.length > 0) {
+      originsByNetwork[networkId] = origins
+    }
+    return originsByNetwork
+  }, {})
+}

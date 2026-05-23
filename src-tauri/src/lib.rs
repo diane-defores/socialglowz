@@ -1,3 +1,7 @@
+use std::collections::HashMap;
+#[cfg(target_os = "android")]
+use std::collections::HashSet;
+
 use tauri::{AppHandle, Manager};
 
 mod backup;
@@ -108,6 +112,7 @@ fn android_allowed_hosts_for_network(network_id: &str) -> &'static [&'static str
         "discord" => &["discord.com"],
         "reddit" => &["reddit.com"],
         "snapchat" => &["web.snapchat.com"],
+        "cinderreels" => &["cinderreels.com"],
         "quora" => &["quora.com"],
         "pinterest" => &["pinterest.com"],
         "telegram" => &["web.telegram.org", "telegram.org", "t.me"],
@@ -193,6 +198,97 @@ fn validate_android_webview_url(url: &str, network_id: &str) -> Result<url::Url,
     }
 
     Ok(parsed)
+}
+
+#[cfg(target_os = "android")]
+fn validate_android_storage_origins(
+    storage_origins: Option<Vec<String>>,
+    network_id: &str,
+) -> Result<Vec<String>, String> {
+    let Some(raw_origins) = storage_origins else {
+        return Ok(Vec::new());
+    };
+
+    let allowed_hosts = android_allowed_hosts_for_network(network_id);
+    if allowed_hosts.is_empty() {
+        return Err(format!(
+            "Android storage origins rejected: network `{network_id}` is not allowlisted"
+        ));
+    }
+
+    let mut seen = std::collections::HashSet::new();
+    let mut normalized_origins = Vec::new();
+
+    for raw in raw_origins {
+        let parsed: url::Url = raw
+            .parse()
+            .map_err(|e: url::ParseError| format!("invalid Android storage origin: {e}"))?;
+
+        if parsed.scheme() != "https" {
+            return Err(
+                "Android storage origins rejected: only https scheme is allowed".to_string()
+            );
+        }
+
+        let host = parsed
+            .host_str()
+            .ok_or_else(|| "Android storage origins rejected: host is missing".to_string())?
+            .to_ascii_lowercase();
+
+        if is_disallowed_host_value(&host) {
+            return Err(format!(
+                "Android storage origins rejected: host `{host}` is not allowed"
+            ));
+        }
+
+        if !allowed_hosts
+            .iter()
+            .any(|allowed| host_matches_allowlist(&host, allowed))
+        {
+            return Err(format!(
+                "Android storage origins rejected: host `{host}` is not allowed for `{network_id}`"
+            ));
+        }
+
+        let normalized = match parsed.port() {
+            Some(443) | None => format!("https://{host}"),
+            Some(port) => format!("https://{host}:{port}"),
+        };
+
+        if seen.insert(normalized.clone()) {
+            normalized_origins.push(normalized);
+        }
+    }
+
+    Ok(normalized_origins)
+}
+
+#[cfg(target_os = "android")]
+fn validate_android_storage_origins_by_network(
+    storage_origins_by_network: Option<HashMap<String, Vec<String>>>,
+    network_ids: &[String],
+) -> Result<HashMap<String, Vec<String>>, String> {
+    let Some(raw_origins_by_network) = storage_origins_by_network else {
+        return Ok(HashMap::new());
+    };
+
+    let visible_network_ids = network_ids.iter().map(String::as_str).collect::<HashSet<_>>();
+    let mut validated = HashMap::new();
+
+    for (network_id, origins) in raw_origins_by_network {
+        if !visible_network_ids.contains(network_id.as_str()) {
+            return Err(format!(
+                "Android storage origins rejected: network `{network_id}` is not visible"
+            ));
+        }
+
+        let normalized = validate_android_storage_origins(Some(origins), &network_id)?;
+        if !normalized.is_empty() {
+            validated.insert(network_id, normalized);
+        }
+    }
+
+    Ok(validated)
 }
 
 #[derive(Default)]
@@ -420,6 +516,7 @@ fn open_webview(
     url: String,
     profile_id: String,
     network_id: String,
+    _storage_origins: Option<Vec<String>>,
     x: f64,
     y: f64,
     width: f64,
@@ -548,17 +645,25 @@ fn open_webview(
     url: String,
     profile_id: String,
     network_id: String,
+    storage_origins: Option<Vec<String>>,
     _x: f64,
     _y: f64,
     _width: f64,
     _height: f64,
 ) -> Result<(), String> {
     let validated_url = validate_android_webview_url(&url, &network_id)?;
+    let validated_storage_origins =
+        validate_android_storage_origins(storage_origins, &network_id)?;
 
     // Use "profileId-networkId" as the session key for Android
     let session_key = format!("{}-{}", profile_id, network_id);
     app.android_webview()
-        .open(validated_url.as_str(), &session_key, &network_id)
+        .open(
+            validated_url.as_str(),
+            &session_key,
+            &network_id,
+            validated_storage_origins,
+        )
         .map_err(|e| e.to_string())
 }
 
@@ -714,15 +819,26 @@ fn set_text_zoom(_app: AppHandle, _level: i32) -> Result<(), String> {
 /// Sync the bottom bar network icons with the profile's visible networks.
 #[tauri::command]
 #[cfg(target_os = "android")]
-fn set_bar_networks(app: AppHandle, network_ids: Vec<String>) -> Result<(), String> {
+fn set_bar_networks(
+    app: AppHandle,
+    network_ids: Vec<String>,
+    storage_origins_by_network: Option<HashMap<String, Vec<String>>>,
+) -> Result<(), String> {
+    let validated_storage_origins_by_network =
+        validate_android_storage_origins_by_network(storage_origins_by_network, &network_ids)?;
+
     app.android_webview()
-        .set_bar_networks(network_ids)
+        .set_bar_networks(network_ids, validated_storage_origins_by_network)
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 #[cfg(not(target_os = "android"))]
-fn set_bar_networks(_app: AppHandle, _network_ids: Vec<String>) -> Result<(), String> {
+fn set_bar_networks(
+    _app: AppHandle,
+    _network_ids: Vec<String>,
+    _storage_origins_by_network: Option<HashMap<String, Vec<String>>>,
+) -> Result<(), String> {
     Ok(()) // no-op on desktop — no overlay bar
 }
 

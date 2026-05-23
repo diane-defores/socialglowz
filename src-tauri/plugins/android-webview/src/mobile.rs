@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::collections::HashMap;
 use tauri::{plugin::PluginHandle, Runtime};
 
 use crate::error::{Error, Result};
@@ -9,6 +10,7 @@ pub struct OpenRequest {
     pub url: String,
     pub account_id: String,
     pub network_id: String,
+    pub storage_origins: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -33,6 +35,7 @@ pub struct DarkModeRequest {
 #[serde(rename_all = "camelCase")]
 pub struct BarNetworksRequest {
     pub network_ids: Vec<String>,
+    pub storage_origins_by_network_json: String,
 }
 
 #[derive(Serialize)]
@@ -64,7 +67,13 @@ pub struct DeleteSessionRequest {
 pub struct AndroidWebview<R: Runtime>(pub PluginHandle<R>);
 
 impl<R: Runtime> AndroidWebview<R> {
-    pub fn open(&self, url: &str, account_id: &str, network_id: &str) -> Result<()> {
+    pub fn open(
+        &self,
+        url: &str,
+        account_id: &str,
+        network_id: &str,
+        storage_origins: Vec<String>,
+    ) -> Result<()> {
         self.0
             .run_mobile_plugin(
                 "openWebView",
@@ -72,6 +81,7 @@ impl<R: Runtime> AndroidWebview<R> {
                     url: url.to_string(),
                     account_id: account_id.to_string(),
                     network_id: network_id.to_string(),
+                    storage_origins,
                 },
             )
             .map_err(|e| Error::PluginInvoke(e.to_string()))
@@ -123,9 +133,22 @@ impl<R: Runtime> AndroidWebview<R> {
             .map_err(|e| Error::PluginInvoke(e.to_string()))
     }
 
-    pub fn set_bar_networks(&self, network_ids: Vec<String>) -> Result<()> {
+    pub fn set_bar_networks(
+        &self,
+        network_ids: Vec<String>,
+        storage_origins_by_network: HashMap<String, Vec<String>>,
+    ) -> Result<()> {
+        let storage_origins_by_network_json =
+            serde_json::to_string(&storage_origins_by_network)
+                .map_err(|e| Error::PluginInvoke(e.to_string()))?;
         self.0
-            .run_mobile_plugin("setBarNetworks", BarNetworksRequest { network_ids })
+            .run_mobile_plugin(
+                "setBarNetworks",
+                BarNetworksRequest {
+                    network_ids,
+                    storage_origins_by_network_json,
+                },
+            )
             .map_err(|e| Error::PluginInvoke(e.to_string()))
     }
 
