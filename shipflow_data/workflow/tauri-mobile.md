@@ -18,7 +18,7 @@ So a Linux server cannot build iOS locally.
 
 1. Keep coding on your server (frontend + Rust shared logic).
 2. Build desktop Linux on server/CI (already configured in `.github/workflows/build.yml`).
-3. Build Android in CI on Ubuntu runners.
+3. Build Android in CI on Blacksmith Ubuntu runners through GitHub Actions.
 4. Build iOS in CI on macOS runners.
 
 ## Hetzner + Termux workflow (recommended)
@@ -26,7 +26,7 @@ So a Linux server cannot build iOS locally.
 If your code runs on a remote Linux server and your phone is not directly connected to that server:
 
 1. Push your branch to GitHub.
-2. Run the workflow `Dev Builds (Android + Windows)` (manual or any `git push`).
+2. Run the workflow `Dev Builds (Android + Windows)` (manual or any `git push`) on GitHub Actions / Blacksmith.
 3. Download the artifact `socialglowz-android-debug`.
 4. Install the APK on your Android phone and test.
 
@@ -54,7 +54,7 @@ To test on Windows without building locally:
 ## Notes
 
 - `ios` commands require a macOS machine/runner with Xcode.
-- If you cannot install Android SDK locally, run Android build in CI only.
+- If you cannot install Android SDK locally, run Android build in CI only. For this project, Android manual QA is considered authoritative only after installing the APK artifact produced by the GitHub Actions / Blacksmith dev build.
 - For signing/publishing, add keystore/certificate secrets in CI.
 - `tauri android dev` with live reload needs a machine that has:
   - Java + Android SDK/NDK

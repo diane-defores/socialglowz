@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2026-05-23]
+
+### Security
+- Added Android WebView session isolation for CinderReels profile switching, including per-session cookie/localStorage snapshots and validated storage origins.
+
+### Changed
+- Documented the Android validation mode: APKs are built by GitHub Actions on Blacksmith and installed on device for authoritative manual QA.
+
 ## [2026-05-10]
 
 ### Security
