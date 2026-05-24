@@ -38,7 +38,8 @@ describe("cloud sync runtime payload validation", () => {
       hapticEnabled: false,
     });
 
-    expect(asCloudSettings({ theme: "purple", textZoom: 10 })).toBeNull();
+    expect(asCloudSettings({ textZoom: 50 })).toEqual({ textZoom: 50 });
+    expect(asCloudSettings({ theme: "purple", textZoom: 45 })).toBeNull();
     expect(asCloudSettings(null)).toBeNull();
   });
 

@@ -29,8 +29,9 @@ describe("convex validators", () => {
     expect(() => assertLanguage("fr")).not.toThrow();
     expect(() => assertLanguage("en-US")).not.toThrow();
     expect(() => assertLanguage("fr_fr")).toThrow(/match/i);
+    expect(() => assertTextZoom(50)).not.toThrow();
     expect(() => assertTextZoom(100)).not.toThrow();
-    expect(() => assertTextZoom(10)).toThrow(/between 75 and 200/i);
+    expect(() => assertTextZoom(45)).toThrow(/between 50 and 200/i);
   });
 
   it("validates avatar payload shape", () => {

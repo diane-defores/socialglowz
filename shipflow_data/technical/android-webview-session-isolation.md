@@ -58,7 +58,7 @@ Ce document décrit le contrat actif d'isolation et de pooling des sessions WebV
 - `show_webview` réaffiche une session chaude existante et renvoie si elle a été trouvée.
 - `set_bar_networks` configure les réseaux disponibles dans la bottom bar Android et transmet `storageOriginsByNetwork` pour les switches natifs.
 - `delete_network_session` doit supprimer les données persistées associées à la session ciblée.
-- Les flows backup/restore doivent conserver les snapshots `localStorage` sous la même clé session + origin.
+- Les flows backup/restore doivent conserver les snapshots `localStorage` sous la même clé session + origin. En mode multi-profile, un import est traité comme un remplacement de session: les hôtes chauds et profils WebKit concernés sont détruits, puis les snapshots importés sont réhydratés une seule fois au prochain chargement de la session.
 
 ## Isolation Contract
 
@@ -84,6 +84,7 @@ Les autres réseaux bénéficient du même mécanisme via leur URL principale. U
 - La frontière de session Android WebView reste `${profileId}-${networkId}`.
 - En mode multi-profile, une WebView de session doit recevoir son profil WebKit avant tout accès WebView autre que la construction.
 - Les cookies et snapshots fallback `localStorage` sont toujours associés à une origin exacte.
+- Après import de backup, les profils WebKit natifs concernés doivent être recréés depuis les snapshots importés; ne pas laisser un profil WebKit chaud préexistant masquer les données restaurées.
 - Le pool de WebViews chaudes reste borné; les hôtes evincés sont détruits avant suppression du profil WebKit.
 - Les origins additionnelles doivent rester déclaratives dans `src/config/socialNetworks.ts`.
 - Le fallback single-WebView ne doit pas promettre la couverture d'IndexedDB, CacheStorage, service workers, cache HTTP global WebView ou credential store système.

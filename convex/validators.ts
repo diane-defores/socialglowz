@@ -128,8 +128,8 @@ export function assertTextZoom(level: number) {
   if (!Number.isFinite(level)) {
     throw new Error("textZoom must be a finite number");
   }
-  if (level < 75 || level > 200) {
-    throw new Error("textZoom must be between 75 and 200");
+  if (level < 50 || level > 200) {
+    throw new Error("textZoom must be between 50 and 200");
   }
 }
 

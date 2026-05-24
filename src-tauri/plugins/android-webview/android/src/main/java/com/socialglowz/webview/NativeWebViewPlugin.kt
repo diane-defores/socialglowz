@@ -53,7 +53,7 @@ import java.security.MessageDigest
 import org.json.JSONObject
 
 private const val TAG = "SFZ"
-private const val TEXT_ZOOM_MIN = 75
+private const val TEXT_ZOOM_MIN = 50
 private const val TEXT_ZOOM_MAX = 200
 private const val TEXT_ZOOM_STEP = 5
 private const val TEXT_ZOOM_DEFAULT = 100
@@ -61,6 +61,7 @@ private const val TEXT_ZOOM_RANGE_STEPS = (TEXT_ZOOM_MAX - TEXT_ZOOM_MIN) / TEXT
 private const val DEFAULT_TAP_SOUND_VARIANT = "classic"
 private const val STORAGE_BRIDGE_OBJECT = "sfzStorageBridge"
 private const val LOCAL_STORAGE_PREFS_NAME = "sfz_local_storage"
+private const val LOCAL_STORAGE_RESTORE_PENDING_PREFS_NAME = "sfz_local_storage_restore_pending"
 private const val LOCAL_STORAGE_CAPTURE_MAX_BYTES = 262_144
 private const val WEBKIT_PROFILE_PREFIX = "sgzp_"
 private const val MAX_WARM_HOSTS = 3
@@ -1163,6 +1164,9 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
     private val localStoragePrefs by lazy {
         activity.getSharedPreferences(LOCAL_STORAGE_PREFS_NAME, Context.MODE_PRIVATE)
     }
+    private val localStorageRestorePendingPrefs by lazy {
+        activity.getSharedPreferences(LOCAL_STORAGE_RESTORE_PENDING_PREFS_NAME, Context.MODE_PRIVATE)
+    }
 
     // All base URLs we need to save/restore cookies for
     private val COOKIE_URLS = NETWORKS.map { it.url } + listOf(
@@ -1400,6 +1404,30 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
 
     private fun sessionKeyFromPrefKey(key: String): String {
         return key.substringBefore("|", "")
+    }
+
+    private fun collectValidSessionKeysFromPrefKeys(keys: Collection<String>): Set<String> {
+        return keys
+            .asSequence()
+            .map { sessionKeyFromPrefKey(it) }
+            .filter { it.isNotBlank() && parseSessionIdentity(it) != null }
+            .toSet()
+    }
+
+    private fun hasPendingLocalStorageRestore(sessionKey: String): Boolean {
+        return localStorageRestorePendingPrefs.getBoolean(sessionKey, false)
+    }
+
+    private fun clearPendingLocalStorageRestore(sessionKey: String) {
+        localStorageRestorePendingPrefs.edit().remove(sessionKey).apply()
+    }
+
+    private fun replacePendingLocalStorageRestores(sessionKeys: Set<String>) {
+        val editor = localStorageRestorePendingPrefs.edit().clear()
+        for (sessionKey in sessionKeys) {
+            editor.putBoolean(sessionKey, true)
+        }
+        editor.apply()
     }
 
     private fun prefKeyBelongsToProfile(key: String, profileId: String): Boolean {
@@ -1827,11 +1855,12 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
 
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             try {
-                val script = if (isPoolingEnabled()) {
-                    buildLocalStorageCaptureDocumentStartScript(session.sessionKey)
-                } else {
+                val restoreLocalStorage = !isPoolingEnabled() || hasPendingLocalStorageRestore(session.sessionKey)
+                val script = if (restoreLocalStorage) {
                     val snapshotsByOrigin = buildSessionLocalStoragePayload(session.sessionKey, targetOrigin)
                     buildLocalStorageDocumentStartScript(session.sessionKey, snapshotsByOrigin)
+                } else {
+                    buildLocalStorageCaptureDocumentStartScript(session.sessionKey)
                 }
                 val handler = WebViewCompat.addDocumentStartJavaScript(
                     webView,
@@ -1839,7 +1868,11 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
                     allowedOrigins
                 )
                 host?.localStorageScriptHandler = handler
-                host?.localStorageRestoreActive = !isPoolingEnabled()
+                host?.localStorageRestoreActive = restoreLocalStorage
+                if (restoreLocalStorage && isPoolingEnabled()) {
+                    clearPendingLocalStorageRestore(session.sessionKey)
+                    dbg("localStorage restore armed for imported session")
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Session isolation degraded: localStorage restore unavailable", e)
             }
@@ -3055,8 +3088,13 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
     fun importCookiesFromBackup(invoke: Invoke) {
         val args = invoke.parseArgs(ImportCookiesBackupArgs::class.java)
         try {
-            val cookieEditor = cookiePrefs.edit()
-            cookieEditor.clear()
+            val sessionKeysToReset = mutableSetOf<String>()
+            sessionKeysToReset.addAll(collectValidSessionKeysFromPrefKeys(cookiePrefs.all.keys))
+            sessionKeysToReset.addAll(collectValidSessionKeysFromPrefKeys(localStoragePrefs.all.keys))
+
+            val importedCookiePrefs = mutableMapOf<String, String>()
+            val importedLocalStoragePrefs = mutableMapOf<String, String>()
+            val pendingLocalStorageRestoreSessions = mutableSetOf<String>()
 
             val json = args.cookiesJson.trim()
             if (json.isNotEmpty()) {
@@ -3064,13 +3102,13 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
                 val keys = cookies.keys()
                 while (keys.hasNext()) {
                     val key = keys.next()
-                    cookieEditor.putString(key, cookies.optString(key, ""))
+                    val sessionKey = sessionKeyFromPrefKey(key)
+                    if (parseSessionIdentity(sessionKey) != null) {
+                        sessionKeysToReset.add(sessionKey)
+                    }
+                    importedCookiePrefs[key] = cookies.optString(key, "")
                 }
             }
-            cookieEditor.apply()
-
-            val localStorageEditor = localStoragePrefs.edit()
-            localStorageEditor.clear()
 
             val localStorageJson = args.localStorageJson.trim()
             if (localStorageJson.isNotEmpty()) {
@@ -3078,17 +3116,56 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
                 val keys = snapshots.keys()
                 while (keys.hasNext()) {
                     val key = keys.next()
+                    val sessionKey = sessionKeyFromPrefKey(key)
+                    if (parseSessionIdentity(sessionKey) != null) {
+                        sessionKeysToReset.add(sessionKey)
+                    }
                     val snapshotRaw = snapshots.optString(key, "")
                     if (snapshotRaw.isBlank()) continue
                     try {
                         JSONObject(snapshotRaw)
-                        localStorageEditor.putString(key, snapshotRaw)
+                        importedLocalStoragePrefs[key] = snapshotRaw
+                        if (parseSessionIdentity(sessionKey) != null) {
+                            pendingLocalStorageRestoreSessions.add(sessionKey)
+                        }
                     } catch (_: Exception) {
                         Log.w(TAG, "Skipped corrupt localStorage snapshot during import")
                     }
                 }
             }
+
+            val latch = java.util.concurrent.CountDownLatch(1)
+            activity.runOnUiThread {
+                try {
+                    val keys = (sessionKeysToReset + sessionHosts.keys).toSet()
+                    for (sessionKey in keys) {
+                        destroyHost(sessionKey, "backup-import")
+                    }
+                    if (isPoolingEnabled()) {
+                        for (sessionKey in keys) {
+                            deleteWebkitProfileByName(webkitProfileNameForSession(sessionKey))
+                        }
+                    }
+                } finally {
+                    latch.countDown()
+                }
+            }
+            latch.await()
+
+            val cookieEditor = cookiePrefs.edit()
+            cookieEditor.clear()
+            for ((key, value) in importedCookiePrefs) {
+                cookieEditor.putString(key, value)
+            }
+            cookieEditor.apply()
+
+            val localStorageEditor = localStoragePrefs.edit()
+            localStorageEditor.clear()
+            for ((key, value) in importedLocalStoragePrefs) {
+                localStorageEditor.putString(key, value)
+            }
             localStorageEditor.apply()
+            replacePendingLocalStorageRestores(pendingLocalStorageRestoreSessions)
 
             val cm = CookieManager.getInstance()
             cm.removeAllCookies(null)

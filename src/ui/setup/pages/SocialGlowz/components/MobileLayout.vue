@@ -15,9 +15,17 @@
   >
     <!-- Top app bar -->
     <div class="mobile-topbar">
-      <div class="mobile-topbar-title">
-        <span class="mobile-app-name">SocialGlowz</span>
-        <span class="mobile-app-subtitle">{{ $t('account.section_title') }}</span>
+      <div class="mobile-brand">
+        <span class="mobile-app-icon">
+          <img
+            :src="logoUrl"
+            alt="SocialGlowz"
+          />
+        </span>
+        <div class="mobile-topbar-title">
+          <span class="mobile-app-name">SocialGlowz</span>
+          <span class="mobile-app-subtitle">{{ $t('account.section_title') }}</span>
+        </div>
       </div>
       <button
         class="settings-topbar-btn"
@@ -281,6 +289,7 @@ import ThreadsIcon from './icons/ThreadsIcon.vue'
 import SnapchatIcon from './icons/SnapchatIcon.vue'
 import NextdoorIcon from './icons/NextdoorIcon.vue'
 import QuoraIcon from './icons/QuoraIcon.vue'
+import logoUrl from '@/assets/logo.png'
 
 const router = useRouter()
 const webviewStore = useWebviewStore()
@@ -515,6 +524,31 @@ const navigateToNetwork = (network: MenuItem) => {
   gap: 0.75rem;
   flex-shrink: 0;
   padding: 0.75rem 1rem 0.6rem;
+}
+
+.mobile-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.mobile-app-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 14px;
+  background: var(--primary-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mobile-app-icon img {
+  width: 1.95rem;
+  height: 1.95rem;
+  border-radius: 9px;
+  display: block;
 }
 
 .mobile-topbar-title {

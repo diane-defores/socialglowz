@@ -103,7 +103,7 @@ const CUSTOM_LINK_ICON_MAX = 64;
 const HIDDEN_NETWORKS_MAX = 32;
 const FRIEND_NAME_MAX = 80;
 const FRIEND_NAMES_MAX = 200;
-const TEXT_ZOOM_MIN = 75;
+const TEXT_ZOOM_MIN = 50;
 const TEXT_ZOOM_MAX = 200;
 
 function isRecord(value: unknown): value is Record<string, unknown> {

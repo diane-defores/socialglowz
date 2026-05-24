@@ -1,4 +1,4 @@
-export const TEXT_ZOOM_MIN = 75
+export const TEXT_ZOOM_MIN = 50
 export const TEXT_ZOOM_MAX = 200
 export const TEXT_ZOOM_STEP = 5
 export const TEXT_ZOOM_DEFAULT = 100
