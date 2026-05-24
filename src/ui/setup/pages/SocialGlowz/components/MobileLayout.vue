@@ -877,19 +877,23 @@ const navigateToNetwork = (network: MenuItem) => {
 
 .network-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
 }
 
 .network-tile {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.7rem 0.75rem;
+  justify-content: center;
+  gap: 0.45rem;
+  position: relative;
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0.5rem 0.35rem;
   background: var(--surface-card);
   border: 1px solid var(--surface-border);
-  border-radius: 16px;
+  border-radius: 14px;
   cursor: pointer;
   transition: background-color 0.15s, transform 0.1s;
   box-shadow: var(--card-shadow);
@@ -903,12 +907,13 @@ const navigateToNetwork = (network: MenuItem) => {
 .network-tile.active {
   border-color: var(--primary-color);
   background: color-mix(in srgb, var(--primary-color) 6%, var(--surface-card));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary-color) 35%, transparent), var(--card-shadow);
 }
 
 .network-icon-wrap {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 14px;
+  width: 2.45rem;
+  height: 2.45rem;
+  border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -916,17 +921,23 @@ const navigateToNetwork = (network: MenuItem) => {
 }
 
 .network-icon-wrap i {
-  font-size: 1.35rem;
+  font-size: 1.2rem;
   color: #fff;
 }
 
 .network-name {
-  font-size: 0.8rem;
+  width: 100%;
+  min-width: 0;
+  font-size: 0.68rem;
   font-weight: 600;
   color: var(--text-color);
-  text-align: left;
-  line-height: 1.2;
-  flex: 1;
+  text-align: center;
+  line-height: 1.12;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 /* ─── Network edit mode (long press) ────────────────────────── */
@@ -936,11 +947,13 @@ const navigateToNetwork = (network: MenuItem) => {
 }
 
 .network-toggle {
-  width: 2.2rem;
-  height: 1.3rem;
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  width: 1.75rem;
+  height: 1rem;
   border-radius: 0.75rem;
   background: var(--primary-color);
-  position: relative;
   flex-shrink: 0;
   transition: background-color 0.2s;
 }
@@ -951,10 +964,10 @@ const navigateToNetwork = (network: MenuItem) => {
 
 .network-toggle-thumb {
   position: absolute;
-  top: 2.5px;
-  right: 3px;
-  width: 0.85rem;
-  height: 0.85rem;
+  top: 2px;
+  right: 2px;
+  width: 0.75rem;
+  height: 0.75rem;
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 2px rgba(0,0,0,0.2);
@@ -962,7 +975,7 @@ const navigateToNetwork = (network: MenuItem) => {
 }
 
 .network-toggle.hidden .network-toggle-thumb {
-  transform: translateX(-0.85rem);
+  transform: translateX(-0.75rem);
 }
 
 .edit-hint {

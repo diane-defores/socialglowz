@@ -221,6 +221,9 @@ None for implementation. If `MULTI_PROFILE` does not compile or is unavailable o
 | 2026-05-23 20:00:27 UTC | sf-build | gpt-5.5/gpt-5.4-mini scouts | Rewrote spec around AndroidX WebKit multi-profile pooling with process/data-directory-suffix as fallback. | ready | sf-start |
 | 2026-05-23 20:19:35 UTC | sf-start | GPT-5 Codex + delegated implementation context | Implemented AndroidX WebKit multi-profile host pooling, Rust/mobile bridge show/hide semantics, and docs updates. | implemented | sf-verify |
 | 2026-05-23 20:19:35 UTC | sf-verify | GPT-5 Codex | Ran local typecheck, lint, tests, metadata lint, diff checks, and static Android WebKit contract checks; Android build/manual APK proof remains CI/APK-only. | partial | Ship/push to GitHub Actions / Blacksmith for APK QA after explicit risk acceptance. |
+| 2026-05-24 13:39:23 UTC | sf-test | GPT-5 Codex | Captured Android APK manual Test 1 failure: same-profile network return takes about 4 seconds and visibly reloads every time. | failed | sf-fix BUG-2026-05-24-001 |
+| 2026-05-24 13:42:45 UTC | sf-test | GPT-5 Codex | Captured Android APK manual Tests 2 and 3 pass for profile isolation and return-to-profile session behavior. | partial | collect SFZ logs for Test 1 reload path |
+| 2026-05-24 13:53:11 UTC | sf-test | GPT-5 Codex | Analyzed copied SFZ logs; installed APK logs show old switch path with explicit `loadUrl` and a stale debug string absent from current source. | blocked | ship current code to Blacksmith APK, then retest Test 1 |
 
 ## Current Chantier Flow
 
@@ -229,6 +232,6 @@ None for implementation. If `MULTI_PROFILE` does not compile or is unavailable o
 | sf-spec | ready | Spec corrected for AndroidX WebKit multi-profile pooling and process-suffix fallback only if needed. |
 | sf-ready | ready | Ready for sequential implementation; no parallel write batches. |
 | sf-start | implemented | Android multi-profile host pool, show/hide bridge, LRU eviction, profile deletion handling, and docs implemented locally. |
-| sf-verify | partial | Local JS/Rust/static/docs checks passed where available; cargo check blocked by missing system pkg-config/GTK deps, local Android build blocked by missing generated `src-tauri/gen/android`; APK manual QA still required. |
+| sf-verify | blocked | Installed APK logs do not match current source; they show the old switch path (`loadUrl` on every switch) and a stale debug string. Need a new APK from the current code before judging the latest pooling implementation. |
 | sf-end | pending | Not closed. |
-| sf-ship | pending | Not shipped; requires explicit acceptance to push partial local proof and generate the Blacksmith APK. |
+| sf-ship | pending | Ship/push current code to generate a fresh Blacksmith APK, then retest `BUG-2026-05-24-001`. |
