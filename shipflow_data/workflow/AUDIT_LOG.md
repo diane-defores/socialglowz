@@ -2,6 +2,8 @@
 
 > Project-local audit history. Append-only.
 
+🟡 [socialglowz] audit: extension dependencies | date: 2026-05-26 | overall: B | issues: prod audit clean; full audit keeps 1 moderate dev-only uuid via web-ext; vite-plugin-pwa advisory path removed; ws via Convex mitigated with ws@8.20.1 override
+
 | Date | Scope | Code | Design | Copy | SEO | GTM | Translate | Deps | Perf | Overall | Issues |
 |------|-------|------|--------|------|-----|-----|-----------|------|------|---------|--------|
 | 2026-02-27 | Full project | — | B | — | — | — | — | — | — | B | 2 critical + 4 high + 5 medium fixed — all issues resolved |

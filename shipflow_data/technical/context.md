@@ -1,10 +1,10 @@
 ---
 artifact: documentation
 metadata_schema_version: "1.0"
-artifact_version: "1.1.0"
+artifact_version: "1.1.1"
 project: "socialglowz"
 created: "2026-04-26"
-updated: "2026-05-23"
+updated: "2026-05-25"
 status: reviewed
 source_skill: sf-docs
 scope: context
@@ -20,7 +20,6 @@ evidence:
   - "vite.chrome.config.ts"
   - "vite.firefox.config.ts"
   - "vite.tauri.config.ts"
-  - "vite.web.config.ts"
   - "src/ui/setup/pages/SocialGlowz/main.ts"
   - "src/ui/setup/pages/SocialGlowz/App.vue"
   - "src-tauri/src/lib.rs"
@@ -38,7 +37,6 @@ linked_systems:
   - "shipflow_data/technical/architecture.md"
   - "package.json"
   - "vite.config.ts"
-  - "vite.web.config.ts"
   - "vite.tauri.config.ts"
   - "src-tauri/tauri.conf.json"
   - "convex/schema.ts"
@@ -49,7 +47,7 @@ next_step: "/sf-docs update shipflow_data/technical/context.md"
 
 ## What SocialGlowz Is
 
-SocialGlowz est une application social multi-canaux avec une base Vue 3 commune et 4 cibles de distribution : extension navigateur, desktop Tauri, Android, et web app.
+SocialGlowz est une application social multi-canaux avec une base Vue 3 commune et des cibles de distribution extension navigateur, desktop Tauri et mobile Tauri.
 
 ## Product/Platform Matrix
 
@@ -62,10 +60,6 @@ SocialGlowz est une application social multi-canaux avec une base Vue 3 commune 
   - Entrée principale `src-tauri/src/lib.rs` + `src-tauri/tauri.conf.json`
 - Android
   - Cible Tauri mobile avec plugin `src-tauri/plugins/android-webview`
-- Web (Vercel)
-  - Build via `vite.web.config.ts`
-  - Page marketing + pages statiques en `fr/` et `en/`
-
 ## Repo Map
 
 - `src/` : logique partagée, stores, composables, services, utilitaires.
@@ -115,8 +109,12 @@ SocialGlowz est une application social multi-canaux avec une base Vue 3 commune 
 ### 4) Extension surfaces
 
 - `src/background/index.ts` gère install/update et ouvre la page setup.
-- `src/content-script/index.ts` injecte l'iframe UI côté page web.
+- `src/content-script/index.ts` est neutre par défaut (pas d'injection globale active).
 - `src/ui/action-popup`, `src/ui/options-page`, `src/ui/side-panel` exposent des pages dédiées au navigateur.
+- `src/platform/capabilities.ts` centralise la détection extension/Tauri.
+- `src/platform/extensionNetworkLauncher.ts` ouvre les réseaux en onglets navigateur avec validation stricte HTTPS.
+- Le side panel est activé uniquement sur Chrome via `manifest.chrome.config.ts`; Firefox conserve un fallback popup/options/setup.
+- Le détail de parité est dans `shipflow_data/technical/extension-parity-map.md`.
 
 ## Technical Decisions
 

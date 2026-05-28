@@ -139,10 +139,12 @@ Vue fonctionnelle du cœur de SocialGlowz sans lire tout le projet.
 
 - `manifest.config.ts` -> permissions + pages d'extension.
 - `manifest.chrome.config.ts` / `manifest.firefox.config.ts` -> variantes manifeste.
+- `src/platform/capabilities.ts` -> détection de capacité extension/Tauri (side panel, native webview, backup natif).
+- `src/platform/extensionNetworkLauncher.ts` -> launcher onglets + validation URL HTTPS.
 - `src/background/index.ts`
   - hooks install/update et redirection setup.
 - `src/content-script/index.ts`
-  - injection iframe.
+  - no-op par défaut (pas d'injection globale).
 
 ## High-change Areas
 

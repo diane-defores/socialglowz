@@ -1,7 +1,6 @@
 <template>
-  <div>
-    <h1>Content Script UI Playround</h1>
-    <TestComponent />
+  <div class="p-3 text-sm">
+    SocialGlowz overlay is disabled by default in extension mode.
   </div>
 </template>
 

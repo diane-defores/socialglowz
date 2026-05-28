@@ -1,14 +1,14 @@
 ---
 artifact: claude_instructions
 metadata_schema_version: "1.0"
-artifact_version: "1.0.0"
+artifact_version: "1.0.1"
 project: socialglowz
 created: "2026-04-26"
 status: active
 source_skill: sf-docs
 scope: technical-guidance
 owner: "Diane"
-updated: "2026-04-26"
+updated: "2026-05-25"
 confidence: high
 risk_level: low
 security_impact: medium
@@ -32,7 +32,7 @@ This repository is **SocialGlowz**, a multi-platform social networking dashboard
 Primary goals for any agent:
 
 - Keep changes scoped and low-risk.
-- Preserve backward compatibility across Chrome, Firefox, web, and desktop targets.
+- Preserve backward compatibility across Chrome, Firefox, desktop, and mobile/Tauri targets.
 - Respect existing architecture: shared Vue source with platform-specific Vite configs.
 
 ## Operating constraints
@@ -48,16 +48,23 @@ Primary goals for any agent:
 - Platform variants are controlled by:
   - `vite.chrome.config.ts`
   - `vite.firefox.config.ts`
-  - `vite.web.config.ts`
   - `vite.tauri.config.ts`
 - Backend stack uses Convex + Convex Auth:
   - Frontend client entry: `src/lib/convex.ts`
   - Auth wiring: `src/lib/convexAuth.ts`
 
+## Extension parity guardrails
+
+- Extension launcher logic must stay in `src/platform/` and must not import Tauri APIs directly.
+- Custom links in extension mode must be normalized `https://` URLs only.
+- Reject dangerous schemes (`javascript:`, `data:`, `file:`, `chrome:`, `moz-extension:`) and embedded credentials.
+- Do not log tokens, cookies, backup payloads, or sensitive full URLs in extension paths.
+- Chrome side panel is Chrome-only; Firefox must not receive broken side panel promises.
+- Extension mode must state native limitations honestly (no Tauri WebView isolation/haptics/native backup).
+
 ## Common commands
 
 - `pnpm dev` — run Chrome + Firefox extension dev flows.
-- `pnpm build:web` — build web deployment.
 - `pnpm build:chrome` / `pnpm build:firefox` — extension builds.
 - `pnpm tauri:dev` / `pnpm tauri:bundle` — Tauri desktop flows.
 - `pnpm test:once` / `pnpm test`.

@@ -21,6 +21,7 @@ declare module 'vue' {
     DiscordView: typeof import('./../components/networks/DiscordView.vue')['default']
     DisplayError: typeof import('./../../../../../components/state/DisplayError.vue')['default']
     Dropdown: typeof import('primevue/dropdown')['default']
+    ExtensionParitySurface: typeof import('./../components/ExtensionParitySurface.vue')['default']
     FacebookView: typeof import('./../components/networks/FacebookView.vue')['default']
     FriendsPanel: typeof import('./../components/FriendsPanel.vue')['default']
     GmailView: typeof import('./../components/networks/GmailView.vue')['default']

@@ -34,6 +34,7 @@
     "shares_count": "partages",
     "visibility_public": "Tout le monde",
     "ok": "OK",
+    "open": "Ouvrir",
     "copy": "Copier",
     "copied": "Copié !",
     "show_more": "Voir plus",
@@ -269,6 +270,60 @@
     "invalid_credentials_error": "E-mail ou mot de passe incorrect.",
     "no_account_hint": "Créez un compte pour synchroniser vos données sur tous vos appareils.",
     "unavailable_hint": "La synchro de compte n'est pas disponible dans cette version — backend Convex non configuré."
+  },
+  "extension": {
+    "surface": {
+      "popup_title": "Lanceur rapide",
+      "popup_description": "Ouvrez rapidement vos réseaux sociaux depuis le popup de la barre d’outils.",
+      "side_panel_title": "Surface de contrôle du panneau latéral",
+      "side_panel_description": "Gardez SocialGlowz ouvert pendant la navigation et lancez les réseaux dans de nouveaux onglets.",
+      "options_title": "Paramètres extension",
+      "options_description": "Configurez le profil, la langue et le comportement du lanceur en mode extension.",
+      "setup_title": "Tableau de bord extension SocialGlowz",
+      "setup_description": "Utilisez cette page pour un lanceur plus large et la gestion des profils.",
+      "install_title": "SocialGlowz installé",
+      "install_description": "Terminez la configuration et ouvrez votre tableau de bord extension.",
+      "update_title": "SocialGlowz mis à jour",
+      "update_description": "Vérifiez les capacités du mode extension après cette mise à jour."
+    },
+    "profile": {
+      "label": "Profil actif"
+    },
+    "networks": {
+      "title": "Lanceur de réseaux"
+    },
+    "custom_links": {
+      "title": "Liens personnalisés",
+      "name_placeholder": "Nom",
+      "url_placeholder": "https://example.com"
+    },
+    "actions": {
+      "open_dashboard": "Ouvrir le tableau de bord",
+      "open_side_panel": "Ouvrir le panneau latéral"
+    },
+    "launch": {
+      "opened": "Ouvert dans un nouvel onglet.",
+      "dashboard_opened": "Tableau de bord ouvert dans un nouvel onglet.",
+      "side_panel_opened": "Panneau latéral ouvert.",
+      "custom_link_added": "Lien personnalisé ajouté.",
+      "errors": {
+        "empty": "Merci de renseigner un nom et une URL.",
+        "invalid": "Cette URL est invalide.",
+        "forbidden_protocol": "Ce schéma d’URL est bloqué.",
+        "https_required": "Seuls les liens HTTPS sont autorisés.",
+        "credentials_not_allowed": "Les liens avec identifiants intégrés sont bloqués.",
+        "tabs_api_unavailable": "L’API onglets du navigateur est indisponible dans ce contexte.",
+        "tab_creation_failed": "Impossible d’ouvrir ce lien dans un nouvel onglet.",
+        "runtime_url_unavailable": "Impossible de résoudre l’URL du tableau de bord extension.",
+        "side_panel_unavailable": "Le panneau latéral est disponible uniquement dans les contextes compatibles Chrome.",
+        "side_panel_failed": "Impossible d’ouvrir le panneau latéral."
+      }
+    },
+    "limitations": {
+      "session_isolation": "Le mode extension utilise des onglets navigateur classiques. Il ne peut pas isoler cookies et localStorage par profil SocialGlowz comme les WebViews Tauri natives.",
+      "native_backup": "Les workflows natifs de sauvegarde et restauration ne sont pas disponibles en mode extension.",
+      "native_haptics": "Les vibrations et la barre Android native ne sont pas disponibles en mode extension."
+    }
   },
   "auth_sync": {
     "blocking_kicker": "Synchronisation du compte",

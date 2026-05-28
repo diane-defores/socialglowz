@@ -34,6 +34,7 @@
     "shares_count": "shares",
     "visibility_public": "Everyone",
     "ok": "OK",
+    "open": "Open",
     "copy": "Copy",
     "copied": "Copied!",
     "show_more": "Show more",
@@ -269,6 +270,60 @@
     "invalid_credentials_error": "Incorrect email or password.",
     "no_account_hint": "Create an account to sync your data across all your devices.",
     "unavailable_hint": "Account sync is unavailable in this build — the Convex backend is not configured."
+  },
+  "extension": {
+    "surface": {
+      "popup_title": "Quick Launcher",
+      "popup_description": "Open your social networks quickly from the toolbar popup.",
+      "side_panel_title": "Side Panel Control Surface",
+      "side_panel_description": "Keep SocialGlowz open while browsing and launch networks in new tabs.",
+      "options_title": "Extension Settings",
+      "options_description": "Configure profile, language, and launcher behavior for extension mode.",
+      "setup_title": "SocialGlowz Extension Dashboard",
+      "setup_description": "Use this page for a larger launcher and profile control surface.",
+      "install_title": "SocialGlowz Installed",
+      "install_description": "Finish setup and open your extension dashboard.",
+      "update_title": "SocialGlowz Updated",
+      "update_description": "Review extension-mode capabilities after this update."
+    },
+    "profile": {
+      "label": "Active profile"
+    },
+    "networks": {
+      "title": "Network Launcher"
+    },
+    "custom_links": {
+      "title": "Custom links",
+      "name_placeholder": "Label",
+      "url_placeholder": "https://example.com"
+    },
+    "actions": {
+      "open_dashboard": "Open full dashboard",
+      "open_side_panel": "Open side panel"
+    },
+    "launch": {
+      "opened": "Opened in a browser tab.",
+      "dashboard_opened": "Dashboard opened in a new tab.",
+      "side_panel_opened": "Side panel opened.",
+      "custom_link_added": "Custom link added.",
+      "errors": {
+        "empty": "Please provide a label and URL.",
+        "invalid": "This URL is invalid.",
+        "forbidden_protocol": "This URL scheme is blocked.",
+        "https_required": "Only HTTPS links are allowed.",
+        "credentials_not_allowed": "Links with embedded credentials are blocked.",
+        "tabs_api_unavailable": "Browser tabs API is unavailable in this context.",
+        "tab_creation_failed": "Unable to open this link in a new tab.",
+        "runtime_url_unavailable": "Unable to resolve extension dashboard URL.",
+        "side_panel_unavailable": "Side panel is only available in Chrome-compatible contexts.",
+        "side_panel_failed": "Unable to open the side panel."
+      }
+    },
+    "limitations": {
+      "session_isolation": "Extension mode uses regular browser tabs. It cannot isolate cookies and localStorage per SocialGlowz profile like native Tauri WebViews.",
+      "native_backup": "Native backup and restore workflows are unavailable in extension mode.",
+      "native_haptics": "Haptics and Android bottom-bar controls are unavailable in extension mode."
+    }
   },
   "auth_sync": {
     "blocking_kicker": "Account sync",

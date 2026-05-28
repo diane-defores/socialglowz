@@ -1,10 +1,10 @@
 ---
 artifact: dependency_risk_register
 metadata_schema_version: "1.0"
-artifact_version: "1.0.0"
+artifact_version: "1.0.1"
 project: socialglowz
 created: "2026-04-30"
-updated: "2026-05-02"
+updated: "2026-05-26"
 status: active
 source_skill: sf-start
 scope: dependency-risk
@@ -21,8 +21,8 @@ supersedes: []
 evidence:
   - "Dependency hygiene and native RustSec migration specs define the accepted risk policy."
   - "Register entries document affected dependency paths, reachability, decision, and removal criteria."
-next_review: "2026-06-02"
-next_step: "/sf-verify SocialGlowz Native Tauri RustSec Warning Migration"
+next_review: "2026-06-09"
+next_step: "/sf-verify sg-extension-deps-audit-fixes"
 ---
 
 # Dependency Risk Register
@@ -33,10 +33,11 @@ This register records dependency risks that are accepted, blocked, or still unde
 
 | ID | Status | Affected path | Production reachability | Decision | Evidence | Removal criteria | Next review |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| DEP-RISK-001 | accepted upstream risk | `web-ext@10.1.0 -> node-notifier@10.0.1 -> uuid@8.3.2` | Dev/build only; Firefox lint and extension tooling path | Do not force `uuid@14` through `pnpm.overrides`; keep the advisory tracked until `web-ext` or `node-notifier` ships a compatible fix | `pnpm audit --prod` is clean; `pnpm why uuid` resolves only through `web-ext`; npm metadata still reports `web-ext@10.1.0` as latest and still depends on `node-notifier@10.0.1` | Upgrade normally when upstream removes the vulnerable path and `build:firefox` plus `lint:manifest` pass | 2026-05-30 |
+| DEP-RISK-001 | accepted upstream risk | `web-ext@10.1.0 -> node-notifier@10.0.1 -> uuid@8.3.2` | Dev/build only; Firefox lint and extension tooling path | Do not force `uuid@14` through `pnpm.overrides`; keep the advisory tracked until `web-ext` or `node-notifier` ships a compatible fix | `pnpm audit --prod --audit-level low` is clean and full `pnpm audit --audit-level low` reports only this advisory; `pnpm why uuid` resolves only through `web-ext`; npm metadata still reports `web-ext@10.1.0` as latest and still depends on `node-notifier@10.0.1` | Upgrade normally when upstream removes the vulnerable path and `build:firefox` plus `lint:manifest` pass | 2026-06-09 |
 | DEP-RISK-002 | mitigated in CI | RustSec scan execution gap for native release artifacts | Release path; desktop and Android native packages include Rust crates | Run `cargo audit` before Android debug APK builds and before Linux/Windows Tauri release builds | `.github/workflows/dev-builds.yml` and `.github/workflows/build.yml` install and run `cargo-audit` before native artifact builds; local `cargo audit` runs with exit 0 | Close after both workflows show RustSec audit logs before native artifacts | 2026-05-30 |
 | DEP-RISK-003 | tracked upstream license review | `web-ext@10.1.0 -> update-notifier@7.3.1 -> configstore@7.0.0 -> atomically@2.0.3 -> stubborn-fs@1.2.5` | Dev/build only | Keep as a dev-tooling transitive license-review item while `web-ext` remains required for Firefox manifest linting | `pnpm why atomically` and `pnpm why stubborn-fs` resolve only through `web-ext` update notification tooling | Close if upstream changes dependency path or license metadata is confirmed acceptable for dev-only tooling | 2026-05-30 |
 | DEP-RISK-004 | accepted visible native risk | RustSec warning set through Tauri Linux desktop stack and Tauri parser/codegen paths: GTK3 bindings, `glib`, `rand@0.7.3`, `proc-macro-error`, and `unic-*` crates | Native desktop release path; GTK/WebKitGTK warnings are Linux-specific, parser/codegen warnings remain lockfile-visible for all native scans | Keep `cargo-audit` as the executable gate, fix safe direct drift, and keep remaining warnings visible with advisory-level rationale; no transitive overrides, `.cargo/audit.toml`, `deny.toml`, `cargo-deny`, or suppression config in this stage | 2026-05-02 native pass moved direct `rand@0.8.5` to `0.8.6`; final local `cargo audit --json` reports 0 vulnerabilities, 17 unmaintained warnings, and 2 unsound warnings | Close after GTK/glib and parser warnings are removed by supported Tauri/Wry/GTK/parser updates with native packaging proof, or after a separate dependency-policy spec explicitly accepts suppression tooling | 2026-06-02 |
+| DEP-RISK-005 | mitigated with bounded override | `@convex-dev/auth@0.0.92 -> convex@1.39.1 -> ws@8.18.0` (upstream pin) | Runtime + dev (Convex client and tests) | Keep Convex line upgraded (`convex@1.39.1`, `@convex-dev/auth@0.0.92`, `convex-test@0.0.53`) and enforce `pnpm.overrides.ws=8.20.1` because Convex latest still pins vulnerable `ws@8.18.0` | `pnpm audit --prod --audit-level low` now returns no vulnerabilities; `pnpm why ws` resolves to `8.20.1` through Convex paths; extension builds, lint:manifest, tests, typecheck, and `pnpm tauri:build` pass on this lockfile | Remove override once Convex releases a line that no longer pins vulnerable `ws`, then re-run full dependency validation without override | 2026-06-09 |
 
 ## Native RustSec Warning Migration Evidence
 

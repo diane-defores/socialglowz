@@ -1,6 +1,6 @@
 # SocialGlowz
 
-Dashboard unifié pour gérer tous vos réseaux sociaux depuis une seule interface. Disponible en extension Chrome/Firefox, application desktop, application mobile et web app.
+Dashboard unifié pour gérer tous vos réseaux sociaux depuis une seule interface. Disponible en extension Chrome/Firefox, application desktop et application mobile.
 
 ## Plateformes
 
@@ -11,12 +11,11 @@ Dashboard unifié pour gérer tous vos réseaux sociaux depuis une seule interfa
 | Desktop (Win/Mac/Linux) | Tauri 2 | `pnpm tauri:bundle` | Production |
 | Android | Tauri 2 Mobile | CI GitHub Actions | Production |
 | iOS | Tauri 2 Mobile | CI GitHub Actions (macOS) | Planned |
-| Web (Vercel) | Vite SPA | `pnpm build:web` | Production |
 
 ## Architecture
 
 ```
-Une seule codebase Vue.js → 6 plateformes
+Une seule codebase Vue.js → extension navigateur, desktop et mobile
 
 src/ui/setup/pages/SocialGlowz/    # App principale (Vue 3 + PrimeVue)
 ├── main.ts                        # Entry point standalone
@@ -38,7 +37,6 @@ src/ui/setup/pages/SocialGlowz/    # App principale (Vue 3 + PrimeVue)
 | `vite.chrome.config.ts` | Extension Chrome | `dist/chrome/` |
 | `vite.firefox.config.ts` | Extension Firefox | `dist/firefox/` |
 | `vite.tauri.config.ts` | Desktop/Mobile Tauri | `dist/tauri/` |
-| `vite.web.config.ts` | Web SPA (Vercel) | `dist/web/` |
 
 ## Pourquoi Tauri et pas Flutter ou Expo
 
@@ -81,7 +79,7 @@ SocialGlowz affiche des réseaux sociaux dans des WebViews natives et injecte de
 | Support desktop | Natif | Natif | Limité | Natif |
 | Contrôle cookies WebView | Natif (Kotlin/Swift) | Non | Non | Oui |
 
-**En résumé** : Tauri est le seul framework qui permet de garder une codebase Vue.js unique pour les 6 plateformes, avec un accès bas-niveau au WebView natif pour l'injection de scripts et la gestion des cookies — ce qui est le coeur fonctionnel de SocialGlowz.
+**En résumé** : Tauri est le framework qui permet de garder une codebase Vue.js unique pour les cibles desktop et mobile, avec un accès bas-niveau au WebView natif pour l'injection de scripts et la gestion des cookies — ce qui est le coeur fonctionnel de SocialGlowz.
 
 ## Stack technique
 
@@ -91,7 +89,22 @@ SocialGlowz affiche des réseaux sociaux dans des WebViews natives et injecte de
 - **i18n** : vue-i18n
 - **Build** : Vite 6, pnpm
 - **Desktop/Mobile** : Tauri 2 (Rust + Kotlin/Swift)
-- **Hosting web** : Vercel
+
+## Contrat de parité extension (Chrome/Firefox)
+
+- Les surfaces extension actives (popup, side panel Chrome, options, setup install/update/dashboard) exposent un lanceur SocialGlowz réel basé sur le même catalogue réseaux et les mêmes profils.
+- Le mode extension ouvre les réseaux dans des onglets navigateur (`tabs.create`) au lieu de WebViews natives Tauri.
+- Les liens personnalisés sont validés strictement:
+  - uniquement `https://`;
+  - URL normalisée;
+  - rejet de `javascript:`, `data:`, `file:`, `chrome:`, `moz-extension:`;
+  - rejet des credentials intégrés (`user:pass@host`).
+- L’extension n’injecte plus d’iframe global sur `*://*/*` par défaut.
+- Le side panel est activé uniquement pour Chrome; Firefox reçoit un fallback popup/options/setup sans promesse side panel.
+- Limites explicites en extension:
+  - pas d’isolation de session native par profil (cookies/localStorage partagés du navigateur),
+  - pas de haptics/barre Android native,
+  - pas de backup natif Tauri.
 
 ## Sécurité auth Android (hardening)
 
@@ -138,7 +151,6 @@ pnpm tauri:dev               # Dev desktop Tauri
 # Build
 pnpm build:chrome            # Build extension Chrome
 pnpm build:firefox           # Build extension Firefox
-pnpm build:web               # Build web SPA (Vercel)
 pnpm tauri:bundle            # Build desktop
 
 # Qualité
@@ -151,9 +163,6 @@ pnpm exec tsc -p convex/tsconfig.json --noEmit  # Typecheck Convex
 ```
 
 ## Déploiement
-
-### Web (Vercel)
-Configuré via `vercel.json`. Push sur `master` déclenche un déploiement automatique.
 
 ### Mobile (CI)
 Voir [shipflow_data/workflow/tauri-mobile.md](shipflow_data/workflow/tauri-mobile.md) pour le workflow GitHub Actions.

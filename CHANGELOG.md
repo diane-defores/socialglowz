@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Security
+- Removed the unused `vite-plugin-pwa` dependency path and dropped its transitive advisory chain (`workbox-build` -> Babel/brace-expansion advisories).
+- Upgraded Convex dependencies (`convex`, `@convex-dev/auth`, `convex-test`) and pinned `ws` to `8.20.1` via `pnpm.overrides` to mitigate Convex's vulnerable transitive `ws@8.18.0` pin.
+
+### Changed
+- Compact mobile network list from wide cards to four-column square tiles with centered labels.
+- Aligned project docs and scripts with the active Chrome, Firefox, Tauri desktop, and mobile targets.
+- Replaced extension scaffold surfaces (popup, side panel, options, install/update/setup) with a SocialGlowz extension control surface and browser-tab launcher.
+- Enforced strict extension custom-link validation (`https://` only, blocked dangerous schemes, blocked embedded credentials).
+- Removed default global content-script injection and removed devtools surface exposure from baseline manifest.
+- Split side panel behavior by browser: Chrome-only side panel, Firefox fallback without side panel promise.
+
 ## [2026-05-23]
 
 ### Security

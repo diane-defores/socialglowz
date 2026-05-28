@@ -20,10 +20,5 @@ export default defineManifest((env) => ({
     type: "module",
     persistent: false,
   },
-  permissions: [
-    // @ts-expect-error background permission is not supported in Firefox
-    ...ManifestConfig.permissions.filter(
-      (permission) => !["background", "sidePanel"].includes(permission),
-    ),
-  ],
+  permissions: [...ManifestConfig.permissions],
 }))

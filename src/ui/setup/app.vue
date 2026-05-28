@@ -3,15 +3,8 @@ import { Notivue, Notification } from 'notivue'
 </script>
 
 <template>
-  <div>
-    <AppHeader />
-
-    <div class="w-full p-4 prose">
-      <RouterView />
-    </div>
-
-    <AppFooter />
-
+  <div class="min-h-screen bg-base-100 text-base-content">
+    <RouterView />
     <Notivue v-slot="item">
       <Notification :item="item" />
     </Notivue>

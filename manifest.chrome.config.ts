@@ -4,5 +4,9 @@ import ManifestConfig from "./manifest.config"
 // @ts-expect-error ManifestConfig provides all required fields
 export default defineManifest((env) => ({
   ...ManifestConfig,
+  side_panel: {
+    default_path: "src/ui/side-panel/index.html",
+  },
+  permissions: [...ManifestConfig.permissions, "sidePanel"],
   key: env["CHROME_ADDON_KEY"],
 }))

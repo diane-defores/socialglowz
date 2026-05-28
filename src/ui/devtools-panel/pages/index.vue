@@ -1,7 +1,6 @@
 <template>
-  <div>
-    <h1>Devtools Panel Playground</h1>
-    <TestComponent />
+  <div class="p-3 text-sm">
+    SocialGlowz devtools panel is not enabled in production builds.
   </div>
 </template>
 

@@ -1,8 +1,7 @@
-<template>
-  <div>
-    <h1>Side Panel Playground</h1>
-    <TestComponent />
-  </div>
-</template>
+<script setup lang="ts">
+import ExtensionParitySurface from "@/ui/setup/pages/SocialGlowz/components/ExtensionParitySurface.vue"
+</script>
 
-<script setup lang="ts"></script>
+<template>
+  <ExtensionParitySurface surface="side-panel" />
+</template>

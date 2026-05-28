@@ -1,10 +1,10 @@
 ---
 artifact: technical_guidelines
 metadata_schema_version: "1.0"
-artifact_version: "1.0.0"
+artifact_version: "1.0.1"
 project: "socialglowz"
 created: "2026-04-26"
-updated: "2026-04-27"
+updated: "2026-05-25"
 status: reviewed
 source_skill: sf-docs
 scope: agent-entrypoint
@@ -25,7 +25,6 @@ linked_systems:
   - "vite.chrome.config.ts"
   - "vite.firefox.config.ts"
   - "vite.tauri.config.ts"
-  - "vite.web.config.ts"
 depends_on: []
 supersedes: []
 evidence:
@@ -72,7 +71,6 @@ Il permet de lire les bons documents avant de parcourir le code.
   - une extension navigateur (Chrome + Firefox)
   - un shell desktop Tauri 2 (Windows/Mac/Linux)
   - une build mobile Android via plugin Android WebView
-  - une web SPA déployée sur Vercel
 - L'authentification et le sync principal passent par Convex.
 - Le coeur métier social se trouve dans `src/` et `src/ui/setup/pages/SocialGlowz/`.
 
@@ -80,6 +78,11 @@ Il permet de lire les bons documents avant de parcourir le code.
 
 - Si la tâche concerne l'expérience extension (manifest, background, content script, popup, side panel), ouvrir :
   - `manifest.config.ts`
+  - `manifest.chrome.config.ts`
+  - `manifest.firefox.config.ts`
+  - `shipflow_data/technical/extension-parity-map.md`
+  - `src/platform/capabilities.ts`
+  - `src/platform/extensionNetworkLauncher.ts`
   - `src/background/index.ts`
   - `src/content-script/index.ts`
   - `src/ui/*/index.ts`
@@ -105,7 +108,6 @@ Il permet de lire les bons documents avant de parcourir le code.
   - `vite.chrome.config.ts`
   - `vite.firefox.config.ts`
   - `vite.tauri.config.ts`
-  - `vite.web.config.ts`
   - `package.json`
 
 ## Invariants
