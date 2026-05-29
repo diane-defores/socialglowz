@@ -6,7 +6,7 @@ import { requireAuthUserId } from "./authHelpers";
 
 const PRODUCT_SOCIALGLOWZ = "socialglowz";
 const PLAN_FREE = "free";
-const PLAN_FOUNDER_LTD = "founder_ltd";
+const PLAN_LIFETIME_DEAL = "lifetime_deal";
 
 const ACTIVE_LEGACY_PLANS = new Set(["pro", "team"]);
 
@@ -224,8 +224,8 @@ export const adminUpsertRedemptionCode = mutation({
     const payload = {
       code,
       productId: args.productId ?? PRODUCT_SOCIALGLOWZ,
-      planId: args.planId ?? PLAN_FOUNDER_LTD,
-      source: args.source ?? "appsumo",
+      planId: args.planId ?? PLAN_LIFETIME_DEAL,
+      source: args.source ?? "manual",
       status: args.status ?? "available",
       externalOrderId: args.externalOrderId,
       note: args.note,

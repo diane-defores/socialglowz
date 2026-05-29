@@ -25,7 +25,7 @@ beforeEach(() => {
 });
 
 describe("billing entitlement foundation", () => {
-  it("creates AppSumo redemption codes through the admin-secret mutation", async () => {
+  it("creates lifetime deal redemption codes through the admin-secret mutation", async () => {
     const t = convexTest(schema, modules);
 
     await expect(
@@ -37,7 +37,7 @@ describe("billing entitlement foundation", () => {
 
     const result = await t.mutation(api.billing.adminUpsertRedemptionCode, {
       adminSecret: "test-secret",
-      code: " appsumo 001 ",
+      code: " ltd 001 ",
       externalOrderId: "order-1",
     });
 
@@ -46,12 +46,12 @@ describe("billing entitlement foundation", () => {
     const code = await t.run((ctx) =>
       ctx.db
         .query("redemptionCodes")
-        .withIndex("by_code", (q) => q.eq("code", "APPSUMO-001"))
+        .withIndex("by_code", (q) => q.eq("code", "LTD-001"))
         .unique(),
     );
     expect(code?.productId).toBe("socialglowz");
-    expect(code?.planId).toBe("founder_ltd");
-    expect(code?.source).toBe("appsumo");
+    expect(code?.planId).toBe("lifetime_deal");
+    expect(code?.source).toBe("manual");
   });
 
   it("redeems one code into an active entitlement and billing event", async () => {
@@ -61,17 +61,17 @@ describe("billing entitlement foundation", () => {
 
     await t.mutation(api.billing.adminUpsertRedemptionCode, {
       adminSecret: "test-secret",
-      code: "APPSUMO-002",
+      code: "LTD-002",
       externalOrderId: "order-2",
     });
 
     const redemption = await t.mutation(api.billing.redeemCode, {
-      code: "appsumo-002",
+      code: "ltd-002",
     });
 
     expect(redemption).toMatchObject({
       productId: "socialglowz",
-      planId: "founder_ltd",
+      planId: "lifetime_deal",
       status: "active",
       alreadyRedeemed: false,
     });
@@ -79,9 +79,9 @@ describe("billing entitlement foundation", () => {
     const access = await t.query(api.billing.getProductAccess, {});
     expect(access).toMatchObject({
       productId: "socialglowz",
-      planId: "founder_ltd",
+      planId: "lifetime_deal",
       status: "active",
-      source: "appsumo",
+      source: "manual",
       legacyFallback: false,
     });
 

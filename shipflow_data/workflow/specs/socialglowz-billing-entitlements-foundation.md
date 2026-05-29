@@ -13,7 +13,7 @@ confidence: medium
 risk_level: medium
 security_impact: yes
 docs_impact: yes
-user_story: "En tant que fondatrice, je veux vendre SocialGlowz via AppSumo ou un processeur futur sans enfermer l'accès produit dans un provider de paiement."
+user_story: "En tant que créatrice de SocialGlowz, je veux vendre des Lifetime Deals directs, early-bird ou partenaires sans enfermer l'accès produit dans un provider de paiement."
 linked_systems:
   - convex/schema.ts
   - convex/billing.ts
@@ -32,12 +32,12 @@ next_step: "/sf-start socialglowz-billing-entitlements-foundation"
 
 Create a processor-agnostic access layer before adding any checkout integration.
 
-Payment providers, AppSumo, and manual grants may create access, but SocialGlowz must read access from its own Convex entitlement state.
+Payment providers, marketplace partners, direct LTD campaigns, and manual grants may create access, but SocialGlowz must read access from its own Convex entitlement state.
 
 ## Scope
 
 - Add internal entitlement records for SocialGlowz product access.
-- Add redemption codes for AppSumo/manual LTD codes.
+- Add redemption codes for direct Lifetime Deal, early-bird, partner, or manual codes.
 - Add an append-only billing event ledger for traceability.
 - Add a user mutation to redeem a code.
 - Add a user query to read current product access.
@@ -45,7 +45,7 @@ Payment providers, AppSumo, and manual grants may create access, but SocialGlowz
 
 ## Out of Scope
 
-- Lemon Squeezy, Polar, Paddle, Stripe, or AppSumo API webhooks.
+- Lemon Squeezy, Polar, Paddle, Stripe, marketplace, or AppSumo API webhooks.
 - Public checkout pages.
 - Feature gating UI changes.
 - Tax, invoices, refunds, dunning, or accounting automation.
@@ -53,13 +53,13 @@ Payment providers, AppSumo, and manual grants may create access, but SocialGlowz
 ## Product Defaults
 
 - Product id: `socialglowz`
-- First paid plan: `founder_ltd`
+- First paid plan: `lifetime_deal`
 - Sources: `appsumo`, `manual`, future `lemon_squeezy`, `polar`, `stripe`, `paddle`
 - LTD entitlements should have no `expiresAt` unless explicitly revoked/refunded.
 
 ## Acceptance Criteria
 
-- An authenticated user can redeem one valid available code and receive active `socialglowz/founder_ltd` access.
+- An authenticated user can redeem one valid available code and receive active `socialglowz/lifetime_deal` access.
 - A redeemed code cannot be reused by another user.
 - Re-redeeming the same code by the same user is idempotent.
 - Invalid, disabled, or already-used codes return clear errors without creating access.
@@ -77,5 +77,5 @@ sf-spec ✅ -> sf-ready ✅ -> sf-start ✅ -> sf-verify ✅ -> sf-end ✅ -> sf
 |----------|-------|-------|--------|--------|-----------|
 | 2026-05-29 | sf-build | GPT-5 Codex | Created ready spec for SocialGlowz processor-agnostic entitlement and redemption foundation. | implemented | `/sf-start socialglowz-billing-entitlements-foundation` |
 | 2026-05-29 | sf-build | GPT-5 Codex | Implemented Convex schema, redemption mutations, access query, and targeted tests. | partial | `/sf-verify socialglowz-billing-entitlements-foundation` |
-| 2026-05-29 | sf-build | GPT-5 Codex | Verified targeted Convex tests and core typecheck; updated technical docs and task tracker. | implemented | `Add redemption UI and AppSumo import runbook` |
-| 2026-05-29 22:26:56 UTC | sf-ship | GPT-5 Codex | Quick shipped SocialGlowz processor-agnostic billing entitlement foundation with targeted checks. | shipped | `Add redemption UI and AppSumo import runbook` |
+| 2026-05-29 | sf-build | GPT-5 Codex | Verified targeted Convex tests and core typecheck; updated technical docs and task tracker. | implemented | `Add redemption UI and Lifetime Deal import runbook` |
+| 2026-05-29 22:26:56 UTC | sf-ship | GPT-5 Codex | Quick shipped SocialGlowz processor-agnostic billing entitlement foundation with targeted checks. | shipped | `Add redemption UI and Lifetime Deal import runbook` |

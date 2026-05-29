@@ -55,10 +55,10 @@ export function useBillingAccess() {
   const canRedeem = computed(
     () => canLoadAccess.value && !isAuthLoading.value && !isRedeeming.value,
   );
-  const isFounderLifetime = computed(
+  const isLifetimeDeal = computed(
     () =>
       access.value?.status === "active" &&
-      access.value.planId === "founder_ltd",
+      (access.value.planId === "lifetime_deal" || access.value.planId === "founder_ltd"),
   );
   const status = computed<BillingAccessStatus>(() => {
     if (!isConvexConfigured.value) return "unconfigured";
@@ -137,7 +137,7 @@ export function useBillingAccess() {
     isAuthenticated,
     isAuthLoading,
     isConvexConfigured,
-    isFounderLifetime,
+    isLifetimeDeal,
     isLoading,
     isRedeeming,
     redeemCode,

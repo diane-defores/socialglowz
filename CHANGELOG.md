@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- Added a shared desktop/mobile settings panel for SocialGlowz AppSumo/manual code redemption, backed by the internal processor-agnostic billing entitlement layer.
+- Added a shared desktop/mobile settings panel for SocialGlowz Lifetime Deal and early-bird code activation, backed by the internal processor-agnostic billing entitlement layer.
 
 ### Security
 - Removed the unused `vite-plugin-pwa` dependency path and dropped its transitive advisory chain (`workbox-build` -> Babel/brace-expansion advisories).

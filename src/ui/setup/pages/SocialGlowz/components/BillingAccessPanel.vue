@@ -88,7 +88,7 @@ const {
   access,
   canRedeem,
   errorKey,
-  isFounderLifetime,
+  isLifetimeDeal,
   isRedeeming,
   redeemCode,
   status,
@@ -103,8 +103,8 @@ const statusClass = computed(() => ({
 
 const statusLabel = computed(() => {
   if (status.value === 'active') {
-    return isFounderLifetime.value
-      ? t('billing.status_founder')
+    return isLifetimeDeal.value
+      ? t('billing.status_lifetime_deal')
       : t('billing.status_active')
   }
   if (status.value === 'loading') return t('billing.status_loading')
@@ -119,15 +119,15 @@ const helperText = computed(() => {
   if (status.value === 'signed_out') return t('billing.signed_out_hint')
   if (status.value === 'loading') return t('billing.loading_hint')
   if (status.value === 'active') {
-    return isFounderLifetime.value
-      ? t('billing.founder_active_hint')
+    return isLifetimeDeal.value
+      ? t('billing.lifetime_deal_active_hint')
       : t('billing.active_hint')
   }
   return t('billing.free_hint')
 })
 
 const planLabel = computed(() => {
-  if (isFounderLifetime.value) return t('billing.plan_founder_ltd')
+  if (isLifetimeDeal.value) return t('billing.plan_lifetime_deal')
   if (access.value?.status === 'active') return t('billing.plan_active')
   return t('billing.plan_free')
 })
