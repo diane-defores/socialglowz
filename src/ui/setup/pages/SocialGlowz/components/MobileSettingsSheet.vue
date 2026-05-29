@@ -183,6 +183,9 @@
               </div>
             </div>
 
+            <p class="settings-section-label">{{ $t('billing.section_title') }}</p>
+            <BillingAccessPanel />
+
             <!-- Preferences section -->
             <p class="settings-section-label">{{ $t('settings.preferences') }}</p>
 
@@ -333,6 +336,7 @@ import {
   normalizeTextZoomLevel,
 } from '../utils/textZoom'
 import BackupRestore from './BackupRestore.vue'
+import BillingAccessPanel from './BillingAccessPanel.vue'
 import type { ThemeMode } from '@/utils/themeAuto'
 
 const props = defineProps<{ modelValue: boolean }>()

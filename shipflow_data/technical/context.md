@@ -25,6 +25,7 @@ evidence:
   - "src-tauri/src/lib.rs"
   - "convex/schema.ts"
   - "convex/billing.ts"
+  - "src/ui/setup/pages/SocialGlowz/components/BillingAccessPanel.vue"
   - "manifest.config.ts"
 depends_on:
   - "README.md"
@@ -101,7 +102,7 @@ SocialGlowz est une application social multi-canaux avec une base Vue 3 commune 
 - État local : Pinia + localStorage via stores.
 - Sync cloud : `src/lib/cloudSyncQueue.ts`, `src/lib/cloudSettings.ts`, `src/lib/cloudSync.ts`.
 - Backend : tables Convex (`users`, `socialAccounts`, `activeAccounts`, `settings`, `profiles`, `customLinks`, `friendsFilters`, `entitlements`, `redemptionCodes`, `billingEvents`, `subscriptions`).
-- Accès produit : `convex/billing.ts` est la couche agnostique processeur. L'app doit lire `billing.getProductAccess` et ne pas dépendre directement d'AppSumo, Lemon Squeezy, Polar, Stripe, Paddle ou de la table legacy `subscriptions`. Les codes AppSumo/manual sont importés via `billing.adminUpsertRedemptionCode` avec `SOCIALGLOWZ_BILLING_ADMIN_SECRET`, puis activés côté utilisateur avec `billing.redeemCode`.
+- Accès produit : `convex/billing.ts` est la couche agnostique processeur. L'app lit `billing.getProductAccess` via `src/composables/useBillingAccess.ts` et ne dépend pas directement d'AppSumo, Lemon Squeezy, Polar, Stripe, Paddle ou de la table legacy `subscriptions`. Les codes AppSumo/manual sont importés via `billing.adminUpsertRedemptionCode` avec `SOCIALGLOWZ_BILLING_ADMIN_SECRET`, puis activés côté utilisateur avec `billing.redeemCode` depuis `BillingAccessPanel.vue` dans les réglages desktop/mobile. Les codes restent en mémoire UI uniquement et les erreurs backend sont ramenées à des clés i18n sûres.
 - Android WebView (plugin natif) : quand Android WebKit `MULTI_PROFILE` est disponible, chaque session `${profileId}-${networkId}` utilise un profil WebKit natif distinct et un hôte WebView chaud dans un pool LRU borné. En fallback, le plugin revient au mode single-WebView avec cookies + snapshots `localStorage` persistés par session et par origin exacte. CinderReels déclare une origin explicite car son auth utilise `localStorage`; les autres réseaux utilisent le même mécanisme via leur URL principale.
 - Les origins additionnelles où l'isolation scriptée s'applique sont déclarées côté front dans `src/config/socialNetworks.ts` puis transmises à `open_webview` et `set_bar_networks` (validation HTTPS/allowlist côté Rust Android), afin de couvrir les réseaux dont l'auth/app traverse plusieurs domaines et les switches natifs de la bottom bar Android.
 - Mode dégradé explicite si `DOCUMENT_START_SCRIPT` ou `WEB_MESSAGE_LISTENER` ne sont pas disponibles.
@@ -132,6 +133,7 @@ SocialGlowz est une application social multi-canaux avec une base Vue 3 commune 
 - `src-tauri/src/lib.rs` : commandes natives critiques (webview, session, commande Android).
 - `convex/socialAccounts.ts`, `convex/settings.ts`, `convex/profiles.ts` : tables cœur métier.
 - `convex/billing.ts` : source de vérité d'accès produit, redemption AppSumo/manual et ledger billing agnostique.
+- `src/ui/setup/pages/SocialGlowz/components/BillingAccessPanel.vue` : entrée settings desktop/mobile pour lire l'accès produit et activer un code AppSumo/manual.
 
 ## Read by Task
 

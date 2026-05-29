@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Added a shared desktop/mobile settings panel for SocialGlowz AppSumo/manual code redemption, backed by the internal processor-agnostic billing entitlement layer.
+
 ### Security
 - Removed the unused `vite-plugin-pwa` dependency path and dropped its transitive advisory chain (`workbox-build` -> Babel/brace-expansion advisories).
 - Upgraded Convex dependencies (`convex`, `@convex-dev/auth`, `convex-test`) and pinned `ws` to `8.20.1` via `pnpm.overrides` to mitigate Convex's vulnerable transitive `ws@8.18.0` pin.

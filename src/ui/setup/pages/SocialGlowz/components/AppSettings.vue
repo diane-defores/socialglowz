@@ -115,6 +115,10 @@
 
       <Divider />
 
+      <BillingAccessPanel />
+
+      <Divider />
+
       <!-- Backup / Restore -->
       <div class="setting-item">
         <div class="setting-label">
@@ -144,6 +148,7 @@ import { useOnboardingStore } from '@/stores/onboarding'
 import Dialog from 'primevue/dialog'
 import Divider from 'primevue/divider'
 import BackupRestore from './BackupRestore.vue'
+import BillingAccessPanel from './BillingAccessPanel.vue'
 import type { ThemeMode } from '@/utils/themeAuto'
 
 const { locale, t } = useI18n()
