@@ -442,6 +442,7 @@ Update these docs when implementation begins or changes platform status:
 | 2026-05-26 19:53:40 | sf-start | GPT-5.3 Codex sub-agent + GPT-5 Codex verification | Ran automatable extension verification gap pass: rebuilt Chrome/Firefox, re-linted Firefox manifest, inspected generated manifests/entrypoints/routes, executed Playwright screenshot smoke on Chrome/Firefox dist surfaces, and root-caused remaining UNSAFE_VAR_ASSIGNMENT warnings to vendor/runtime bundles | implemented | /sf-verify extension-tauri-feature-parity |
 | 2026-05-27 21:46:53 | sf-verify | GPT-5 Codex | Re-verified checks, manifests, dependency posture, Tauri frontend build, and automated extension evidence | partial | Fix or explicitly accept web-ext tmp advisory, run real Chrome/Firefox extension smoke, then rerun /sf-verify |
 | 2026-05-28 18:18:00 | sf-start | GPT-5 Codex | Bumped web-ext to ^10.3.0 and forced `tmp` to ^0.2.6 via pnpm overrides to remove the dev-only high-risk tmp advisory; updated lockfile and validated `pnpm audit` is clean at audit-level low | implemented | /sf-verify extension-tauri-feature-parity |
+| 2026-05-29 21:59:07 UTC | sf-build | gpt-5.3-codex | Ran autonomous sf-build verification wave: typecheck, test:once, build:chrome, build:firefox, lint:manifest, manifest shape checks, and targeted scaffold/deprecation scan | partial | Execute manual Chrome/Firefox extension smoke and then rerun sf-verify |
 
 ## Current Chantier Flow
 
