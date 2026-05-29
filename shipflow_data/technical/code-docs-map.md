@@ -4,7 +4,7 @@ metadata_schema_version: "1.0"
 artifact_version: "1.0.1"
 project: "socialglowz"
 created: "2026-05-14"
-updated: "2026-05-22"
+updated: "2026-05-29"
 status: active
 source_skill: sf-docs
 scope: code_docs_map
@@ -20,6 +20,8 @@ linked_systems:
   - "src/ui/setup/pages/SocialGlowz/views/SessionLockView.vue"
   - "src/lib/convexAuth.ts"
   - "src/lib/convexAuth.test.ts"
+  - "convex/billing.ts"
+  - "convex/billing.test.ts"
   - "src-tauri/src/lib.rs"
   - "src-tauri/Cargo.toml"
   - "src-tauri/capabilities/default.json"
@@ -36,6 +38,22 @@ next_step: "/sf-docs maintain shipflow_data/technical/code-docs-map.md"
 ---
 
 # CODE DOCS MAP
+
+## Processor-agnostic product access
+
+- Code:
+  - `convex/schema.ts`
+  - `convex/billing.ts`
+  - `convex/billing.test.ts`
+- Behavior:
+  - SocialGlowz product access is owned by internal `entitlements`, not by a payment processor.
+  - `billing.redeemCode` lets an authenticated user redeem AppSumo/manual codes into active `socialglowz/founder_ltd` access.
+  - `billing.adminUpsertRedemptionCode` is protected by `SOCIALGLOWZ_BILLING_ADMIN_SECRET` and is intended for server/operator imports only.
+  - `billing.getProductAccess` returns active entitlement access and keeps a temporary fallback to legacy `subscriptions`.
+  - `billingEvents` records redemption/admin events for auditability without coupling the app to AppSumo, Lemon Squeezy, Polar, Stripe, Paddle, or another provider.
+- Docs:
+  - `shipflow_data/workflow/specs/socialglowz-billing-entitlements-foundation.md`
+  - `shipflow_data/technical/context.md`
 
 ## Auth/session hardening (Android)
 

@@ -13,6 +13,9 @@
 🟡 [socialglowz] task: Clean unused extension/dev dependencies and package metadata gaps: vuefire, webext-bridge, unplugin-imagemin, get-installed-browsers, unused icon packs, license, engines, and documented overrides | status: todo | area: deps | id: sg-extension-deps-hygiene
 🟠 [socialglowz] task: Run sf-verify for extension parity: Chrome popup/side panel/options/install/update, Firefox popup/options, web-ext innerHTML warnings, and targeted Tauri regression proof | status: todo | area: extension-qa | id: sg-extension-parity-verify
 🟡 [socialglowz] task: Validate compact mobile network grid on narrow and standard device widths | status: todo | area: mobile-ui | id: sg-mobile-network-grid-qa
+🟠 [socialglowz] task: Add processor-agnostic entitlements plus AppSumo/manual code redemption foundation | status: done | area: billing | id: sg-billing-entitlements-foundation
+🟠 [socialglowz] task: Add SocialGlowz UI for entering AppSumo/manual redemption codes and reading billing.getProductAccess | status: todo | area: billing | id: sg-billing-redemption-ui
+🟡 [socialglowz] task: Add operator script or Convex runbook for importing AppSumo code batches with SOCIALGLOWZ_BILLING_ADMIN_SECRET | status: todo | area: billing | id: sg-billing-code-import-runbook
 
 ---
 

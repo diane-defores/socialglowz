@@ -84,6 +84,82 @@ export default defineSchema({
     .index("by_userId", ["userId"])
     .index("by_user_network", ["userId", "networkId"]),
 
+  entitlements: defineTable({
+    userId: v.id("users"),
+    productId: v.string(),
+    planId: v.string(),
+    status: v.union(
+      v.literal("active"),
+      v.literal("revoked"),
+      v.literal("expired"),
+      v.literal("refunded"),
+    ),
+    source: v.union(
+      v.literal("appsumo"),
+      v.literal("manual"),
+      v.literal("lemon_squeezy"),
+      v.literal("polar"),
+      v.literal("stripe"),
+      v.literal("paddle"),
+    ),
+    sourceEventId: v.optional(v.string()),
+    externalCustomerId: v.optional(v.string()),
+    externalOrderId: v.optional(v.string()),
+    startsAt: v.number(),
+    expiresAt: v.optional(v.number()),
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user_product", ["userId", "productId"])
+    .index("by_user_product_plan", ["userId", "productId", "planId"])
+    .index("by_source_event", ["source", "sourceEventId"]),
+
+  redemptionCodes: defineTable({
+    code: v.string(),
+    productId: v.string(),
+    planId: v.string(),
+    source: v.union(v.literal("appsumo"), v.literal("manual")),
+    status: v.union(
+      v.literal("available"),
+      v.literal("redeemed"),
+      v.literal("disabled"),
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    redeemedAt: v.optional(v.number()),
+    redeemedBy: v.optional(v.id("users")),
+    externalOrderId: v.optional(v.string()),
+    note: v.optional(v.string()),
+  })
+    .index("by_code", ["code"])
+    .index("by_redeemedBy", ["redeemedBy"]),
+
+  billingEvents: defineTable({
+    userId: v.optional(v.id("users")),
+    productId: v.string(),
+    planId: v.optional(v.string()),
+    source: v.union(
+      v.literal("appsumo"),
+      v.literal("manual"),
+      v.literal("lemon_squeezy"),
+      v.literal("polar"),
+      v.literal("stripe"),
+      v.literal("paddle"),
+    ),
+    eventType: v.string(),
+    sourceEventId: v.optional(v.string()),
+    externalCustomerId: v.optional(v.string()),
+    externalOrderId: v.optional(v.string()),
+    redemptionCodeId: v.optional(v.id("redemptionCodes")),
+    entitlementId: v.optional(v.id("entitlements")),
+    payload: v.optional(v.any()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_source_event", ["source", "sourceEventId"])
+    .index("by_product", ["productId"]),
+
   subscriptions: defineTable({
     userId: v.id("users"),
     plan: v.union(v.literal("free"), v.literal("pro"), v.literal("team")),

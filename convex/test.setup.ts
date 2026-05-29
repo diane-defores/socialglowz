@@ -8,6 +8,7 @@ export const modules = {
   "./profiles.ts": () => import("./profiles"),
   "./friendsFilters.ts": () => import("./friendsFilters"),
   "./users.ts": () => import("./users"),
+  "./billing.ts": () => import("./billing"),
   "./auth.ts": () => import("./auth"),
   "./http.ts": () => import("./http"),
 };

@@ -8,7 +8,7 @@ status: reviewed
 source_skill: sf-docs
 scope: engineering-guidelines
 owner: "Diane"
-updated: "2026-04-26"
+updated: "2026-05-29"
 confidence: high
 risk_level: medium
 security_impact: medium
@@ -57,6 +57,8 @@ next_step: "/sf-docs audit shipflow_data/technical/README.md"
 - Treat cookies, localStorage, and persisted preferences as sensitive session state.
 - Avoid logging secrets, tokens, or raw credentials.
 - Keep backup and sync actions transparent to users.
+- Treat redemption codes as bearer credentials: do not log raw codes, expose code tables to clients, or put billing admin secrets in browser/mobile builds.
+- Keep product access processor-agnostic: UI and feature gates should read Convex entitlements through `billing.getProductAccess`, not direct provider payloads.
 
 ## Deployment and release
 
