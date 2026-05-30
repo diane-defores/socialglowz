@@ -38,6 +38,7 @@ declare module 'vue-router/auto-routes' {
     '/setup/SocialGlowz/components/AppSettings': RouteRecordInfo<'/setup/SocialGlowz/components/AppSettings', '/setup/SocialGlowz/components/AppSettings', Record<never, never>, Record<never, never>>,
     '/setup/SocialGlowz/components/AppSidebar': RouteRecordInfo<'/setup/SocialGlowz/components/AppSidebar', '/setup/SocialGlowz/components/AppSidebar', Record<never, never>, Record<never, never>>,
     '/setup/SocialGlowz/components/BackupRestore': RouteRecordInfo<'/setup/SocialGlowz/components/BackupRestore', '/setup/SocialGlowz/components/BackupRestore', Record<never, never>, Record<never, never>>,
+    '/setup/SocialGlowz/components/BillingAccessPanel': RouteRecordInfo<'/setup/SocialGlowz/components/BillingAccessPanel', '/setup/SocialGlowz/components/BillingAccessPanel', Record<never, never>, Record<never, never>>,
     '/setup/SocialGlowz/components/common/NetworkLogo': RouteRecordInfo<'/setup/SocialGlowz/components/common/NetworkLogo', '/setup/SocialGlowz/components/common/NetworkLogo', Record<never, never>, Record<never, never>>,
     '/setup/SocialGlowz/components/common/SocialNetworkLogo': RouteRecordInfo<'/setup/SocialGlowz/components/common/SocialNetworkLogo', '/setup/SocialGlowz/components/common/SocialNetworkLogo', Record<never, never>, Record<never, never>>,
     '/setup/SocialGlowz/components/DashboardFilters': RouteRecordInfo<'/setup/SocialGlowz/components/DashboardFilters', '/setup/SocialGlowz/components/DashboardFilters', Record<never, never>, Record<never, never>>,
