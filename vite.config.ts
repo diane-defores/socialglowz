@@ -9,6 +9,7 @@ import Components from "unplugin-vue-components/vite"
 import { createHtmlPlugin } from "vite-plugin-html"
 import VueRouter from "unplugin-vue-router/vite"
 import { defineConfig } from "vite"
+import tailwindcss from "@tailwindcss/vite"
 // @ts-expect-error commonjs module
 import { defineViteConfig as define } from "./define.config.mjs"
 import vueDevTools from "vite-plugin-vue-devtools"
@@ -48,20 +49,12 @@ export default defineConfig({
     preprocessorOptions: {
       scss: {
         api: "modern",
-        // additionalData: `@use "/src/assets/base.scss";`,
-        additionalData: (content: string, filePath: string) => {
-          // do not include base.scss (tailwind etc) in content-script iframe as it will be affect main page styles
-          if (filePath.includes("content-script/index.scss")) {
-            return content
-          }
-
-          return `@use "/src/assets/base.scss";\n${content}`
-        },
       },
     },
   },
 
   plugins: [
+    tailwindcss(),
     VueI18nPlugin({
       include: resolve(
         dirname(fileURLToPath(import.meta.url)),

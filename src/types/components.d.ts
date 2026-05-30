@@ -14,7 +14,6 @@ declare module 'vue' {
     AppSidebar: typeof import('./../components/AppSidebar.vue')['default']
     Avatar: typeof import('primevue/avatar')['default']
     Button: typeof import('primevue/button')['default']
-    Calendar: typeof import('primevue/calendar')['default']
     CommonSocialNetworkLogo: typeof import('./../components/common/SocialNetworkLogo.vue')['default']
     DisplayError: typeof import('./../components/state/DisplayError.vue')['default']
     Dropdown: typeof import('primevue/dropdown')['default']

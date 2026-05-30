@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Added a shared desktop/mobile settings panel for SocialGlowz Lifetime Deal and early-bird code activation, backed by the internal processor-agnostic billing entitlement layer.
+- Added an operator import script and runbook for direct Lifetime Deal and early-bird activation-code batches through the suite entitlement bridge.
 
 ### Security
 - Removed the unused `vite-plugin-pwa` dependency path and dropped its transitive advisory chain (`workbox-build` -> Babel/brace-expansion advisories).

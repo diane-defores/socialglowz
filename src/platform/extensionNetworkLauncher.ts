@@ -134,7 +134,7 @@ export async function launchExternalUrl(rawInput: string): Promise<ExtensionLaun
   return openInNewTab(normalized.url)
 }
 
-export async function openExtensionDashboard(route = "/setup/SocialFlow"): Promise<ExtensionLaunchResult> {
+export async function openExtensionDashboard(route = "/setup/SocialGlowz"): Promise<ExtensionLaunchResult> {
   const runtimeUrl = globalThis.chrome?.runtime?.getURL?.(`src/ui/setup/index.html#${route}`)
   if (!runtimeUrl) {
     return { ok: false, code: "runtime_url_unavailable" }

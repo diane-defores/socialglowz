@@ -1,10 +1,10 @@
 ---
 artifact: documentation
 metadata_schema_version: "1.0"
-artifact_version: "1.0.1"
+artifact_version: "1.1.0"
 project: "socialglowz"
 created: "2026-05-14"
-updated: "2026-05-29"
+updated: "2026-05-30"
 status: active
 source_skill: sf-docs
 scope: code_docs_map
@@ -22,6 +22,7 @@ linked_systems:
   - "src/lib/convexAuth.test.ts"
   - "convex/billing.ts"
   - "convex/billing.test.ts"
+  - "scripts/importSocialGlowzActivationCodes.ts"
   - "src/composables/useBillingAccess.ts"
   - "src/ui/setup/pages/SocialGlowz/components/BillingAccessPanel.vue"
   - "src-tauri/src/lib.rs"
@@ -47,21 +48,32 @@ next_step: "/sf-docs maintain shipflow_data/technical/code-docs-map.md"
   - `convex/schema.ts`
   - `convex/billing.ts`
   - `convex/billing.test.ts`
+  - `scripts/importSocialGlowzActivationCodes.ts`
+  - `scripts/importSocialGlowzActivationCodes.test.ts`
   - `src/composables/useBillingAccess.ts`
   - `src/composables/useBillingAccess.test.ts`
   - `src/ui/setup/pages/SocialGlowz/components/BillingAccessPanel.vue`
   - `src/ui/setup/pages/SocialGlowz/components/AppSettings.vue`
   - `src/ui/setup/pages/SocialGlowz/components/MobileSettingsSheet.vue`
+  - `site/src/config/site.ts`
+  - `site/src/pages/pricing.astro`
+  - `site/src/pages/purchase/success.astro`
+  - `site/src/pages/purchase/cancel.astro`
 - Behavior:
-  - SocialGlowz product access is owned by internal `entitlements`, not by a payment processor.
-  - `billing.redeemCode` lets an authenticated user redeem Lifetime Deal, early-bird, partner, or manual codes into active `socialglowz/lifetime_deal` access.
-  - `billing.adminUpsertRedemptionCode` is protected by `SOCIALGLOWZ_BILLING_ADMIN_SECRET` and is intended for server/operator imports only.
-  - `billing.getProductAccess` returns active entitlement access and keeps a temporary fallback to legacy `subscriptions`.
+  - SocialGlowz lit l’accès produit via le bridge suite WinFlowz ; les tables locales `entitlements`/`redemptionCodes`/`billingEvents` ne sont plus des sources de vérité, elles servent au passage/compatibilité de migration.
+  - `billing.redeemCode` permet à un user authentifié d’activer un code Lifetime Deal, early-bird, partner, ou manual dans l’entitlement ledger suite (`productId=socialglowz`, `plan=lifetime_deal` par défaut).
+  - `billing.adminUpsertRedemptionCode` est protégé par `SOCIALGLOWZ_BILLING_ADMIN_SECRET` et réservé aux imports/ops serveur.
+  - `scripts/importSocialGlowzActivationCodes.ts` importe des batches JSON/JSONL/CSV de codes Lifetime Deal ou early-bird via l'action admin existante, redige les codes dans la sortie, et ne contourne pas le bridge suite.
+  - `billing.getProductAccess` renvoie une réponse suite-driven et retourne un état sûr si le bridge est indisponible ou mal configuré.
   - `billingEvents` records redemption/admin events for auditability without coupling the app UI to AppSumo, Lemon Squeezy, Polar, Stripe, Paddle, or another provider.
   - `BillingAccessPanel.vue` exposes redemption from both desktop and mobile settings, while `useBillingAccess.ts` keeps raw codes in component/composable memory and maps backend errors to safe i18n keys.
 - Docs:
   - `shipflow_data/workflow/specs/socialglowz-billing-entitlements-foundation.md`
   - `shipflow_data/workflow/specs/socialglowz-redemption-ui.md`
+  - `shipflow_data/workflow/specs/socialglowz-suite-entitlement-adapter.md`
+  - `shipflow_data/workflow/specs/socialglowz-processor-agnostic-ltd-commerce.md`
+  - `shipflow_data/technical/billing-activation-code-import.md`
+  - `shipflow_data/technical/platforms/lemonsqueezy.md`
   - `shipflow_data/technical/context.md`
 
 ## Auth/session hardening (Android)

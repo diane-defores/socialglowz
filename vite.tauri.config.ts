@@ -8,6 +8,7 @@ import Icons from 'unplugin-icons/vite'
 import Components from 'unplugin-vue-components/vite'
 import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import { defineConfig } from 'vite'
+import tailwindcss from '@tailwindcss/vite'
 import 'dotenv/config'
 
 const PROJECT_ROOT = dirname(fileURLToPath(import.meta.url))
@@ -46,6 +47,8 @@ export default defineConfig({
   },
 
   plugins: [
+    tailwindcss(),
+
     vue(),
 
     VueI18nPlugin({

@@ -97,17 +97,22 @@ const {
 
 const statusClass = computed(() => ({
   active: status.value === 'active',
-  muted: status.value === 'unconfigured' || status.value === 'signed_out' || status.value === 'loading',
+  muted:
+    status.value === 'unconfigured' ||
+    status.value === 'signed_out' ||
+    status.value === 'loading' ||
+    status.value === 'bridge_unavailable',
   error: status.value === 'error',
 }))
 
 const statusLabel = computed(() => {
   if (status.value === 'active') {
-    return isLifetimeDeal.value
+        return isLifetimeDeal.value
       ? t('billing.status_lifetime_deal')
       : t('billing.status_active')
   }
   if (status.value === 'loading') return t('billing.status_loading')
+  if (status.value === 'bridge_unavailable') return t('billing.status_bridge_unavailable')
   if (status.value === 'signed_out') return t('billing.status_signed_out')
   if (status.value === 'unconfigured') return t('billing.status_unconfigured')
   if (status.value === 'error') return t('billing.status_error')
@@ -118,6 +123,7 @@ const helperText = computed(() => {
   if (status.value === 'unconfigured') return t('billing.unconfigured_hint')
   if (status.value === 'signed_out') return t('billing.signed_out_hint')
   if (status.value === 'loading') return t('billing.loading_hint')
+  if (status.value === 'bridge_unavailable') return t('billing.bridge_unavailable_hint')
   if (status.value === 'active') {
     return isLifetimeDeal.value
       ? t('billing.lifetime_deal_active_hint')
@@ -133,7 +139,9 @@ const planLabel = computed(() => {
 })
 
 const showPlanDetails = computed(() => status.value === 'active' || status.value === 'free')
-const showRedeemForm = computed(() => status.value !== 'active')
+const showRedeemForm = computed(() =>
+  status.value !== 'active' && status.value !== 'bridge_unavailable'
+)
 const inputDisabled = computed(() => !canRedeem.value || isRedeeming.value)
 const submitDisabled = computed(
   () => !redemptionCode.value.trim() || inputDisabled.value,

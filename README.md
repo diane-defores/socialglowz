@@ -138,6 +138,8 @@ VITE_GMAIL_CLIENT_ID=         # Google API (optionnel, Gmail)
 VITE_GMAIL_API_KEY=           # Google API (optionnel, Gmail)
 CONVEX_DEPLOYMENT=            # Déploiement Convex (local/dev), si utilisé
 VITE_CONVEX_SITE_URL=         # Site URL Convex (optionnel)
+SOCIALGLOWZ_SUITE_BRIDGE_URL= # Endpoint suite bridge (suite entitlement ledger)
+SOCIALGLOWZ_SUITE_BRIDGE_SECRET= # Secret serveur->serveur pour bridge suite
 ```
 
 ## Scripts

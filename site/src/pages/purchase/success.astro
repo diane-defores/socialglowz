@@ -1,0 +1,41 @@
+---
+import Layout from '../../layouts/Layout.astro'
+import Navbar from '../../components/Navbar.astro'
+import Footer from '../../components/Footer.astro'
+import { appUrl } from '../../config/site'
+---
+
+<Layout
+  title="Checkout Success - SocialGlowz"
+  description="Your SocialGlowz direct checkout request has been received. Open the app to finish access setup."
+  path="/purchase/success"
+>
+  <main id="main-content" class="min-h-screen bg-background text-foreground">
+    <Navbar />
+    <section class="mx-auto flex min-h-[60vh] max-w-2xl flex-col items-center justify-center px-4 py-24 text-center">
+      <h1 class="text-3xl font-bold text-foreground">Thanks for your order</h1>
+      <p class="mt-4 text-muted-foreground">
+        If the payment is completed, your order status is now being synced to your SocialGlowz account.
+      </p>
+      <p class="mt-2 text-muted-foreground">
+        You can open SocialGlowz and check access in the billing section.
+      </p>
+      <div class="mt-8 flex flex-col gap-3">
+        <a
+          href={appUrl()}
+          class="inline-flex items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-zinc-950 hover:bg-zinc-200"
+        >
+          Open SocialGlowz
+        </a>
+        <a
+          href="/pricing"
+          class="inline-flex items-center justify-center rounded-full border border-border px-5 py-3 text-sm font-semibold text-foreground hover:bg-card"
+        >
+          Return to pricing
+        </a>
+      </div>
+    </section>
+    <Footer />
+  </main>
+</Layout>
+

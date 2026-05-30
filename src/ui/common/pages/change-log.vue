@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { marked } from 'marked'
-
 const version = __VERSION__
 const changelog = __CHANGELOG__
 // const gitCommit = __GIT_COMMIT__
@@ -13,17 +11,14 @@ const changelog = __CHANGELOG__
     <RouterLinkUp />
 
     <p>Version: {{ version }}</p>
-    <!-- eslint-disable vue/no-v-html -->
-    <div
-      class="prose changelog"
-      v-html="marked(changelog)"
-    />
-    <!--eslint-enable-->
+    <pre class="prose changelog">{{ changelog }}</pre>
   </div>
 </template>
 
 <style lang="scss" scoped>
 :deep(.changelog) {
+  white-space: pre-wrap;
+
   input[type='checkbox'] {
     @apply checkbox checkbox-info disabled:opacity-100;
   }

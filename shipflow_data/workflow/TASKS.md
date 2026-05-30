@@ -16,7 +16,8 @@
 🟡 [socialglowz] task: Validate compact mobile network grid on narrow and standard device widths | status: todo | area: mobile-ui | id: sg-mobile-network-grid-qa
 🟠 [socialglowz] task: Add processor-agnostic entitlements plus Lifetime Deal/manual code redemption foundation | status: done | area: billing | id: sg-billing-entitlements-foundation
 🟠 [socialglowz] task: Add SocialGlowz UI for entering Lifetime Deal/early-bird activation codes and reading billing.getProductAccess | status: done | area: billing | id: sg-billing-redemption-ui
-🟡 [socialglowz] task: Add operator script or Convex runbook for importing partner/direct Lifetime Deal code batches with SOCIALGLOWZ_BILLING_ADMIN_SECRET | status: todo | area: billing | id: sg-billing-code-import-runbook
+🟠 [socialglowz] task: Run Lemon Squeezy test-mode buyer smoke for the direct Lifetime Deal path: checkout, success return, activation/status path, and no public AppSumo fallback | status: blocked | area: commerce | id: sg-commerce-lemonsqueezy-testmode-smoke
+🟢 [socialglowz] task: Add operator script or Convex runbook for importing partner/direct Lifetime Deal code batches with SOCIALGLOWZ_BILLING_ADMIN_SECRET | status: done | area: billing | id: sg-billing-code-import-runbook
 
 ---
 

@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import App from './App.vue'
 import PrimeVue from 'primevue/config'
+import Aura from '@primeuix/themes/aura'
 import { router } from './router'
 import { createPinia } from 'pinia'
 import Ripple from 'primevue/ripple'
@@ -20,11 +21,9 @@ import {
 } from '@/lib/convexAuth'
 import { startCloudSyncQueue } from '@/lib/cloudSyncQueue'
 
-// Styles PrimeVue
-import 'primevue/resources/themes/lara-light-blue/theme.css'
-import 'primevue/resources/primevue.css'
-import 'primeicons/primeicons.css'
+import '@/assets/base.css'
 import 'primeflex/primeflex.css'
+import 'primeicons/primeicons.css'
 
 // PrimeVue components are auto-imported by unplugin-vue-components + PrimeVueResolver
 
@@ -219,7 +218,16 @@ async function bootstrap() {
 
   pinia.use(piniaPluginPersistedstate)
 
-  app.use(PrimeVue, { ripple: true })
+  app.use(PrimeVue, {
+    theme: {
+      preset: Aura,
+      options: {
+        darkModeSelector: '.dark',
+        cssLayer: false,
+      },
+    },
+    ripple: true,
+  })
   app.use(ConfirmationService)
   app.use(ToastService)
   app.use(i18n)

@@ -10,9 +10,23 @@ Copy `.env.example` and override these values when the domains change:
 PUBLIC_SITE_URL=https://socialglowz.com
 PUBLIC_APP_URL=https://socialglowz.com
 PUBLIC_EMAIL_DOMAIN=socialglowz.com
+PUBLIC_WINFLOWZ_CHECKOUT_URL=https://winflowz.com
 ```
 
-All canonicals, structured data URLs, and CTA links read from these variables through `src/config/site.ts`.
+All canonicals, structured data URLs, and marketing CTA links read from these variables through `src/config/site.ts`.
+
+### Checkout/Payment links
+
+- `PUBLIC_WINFLOWZ_CHECKOUT_URL`: URL of the WinFlowz suite commerce endpoint used for direct LTD checkout redirects.
+  - Default: `https://winflowz.com`
+  - Checkout CTA currently targets `/api/commerce/checkout?offerId=socialglowz/lifetime_deal`.
+
+Required result pages:
+
+- `/purchase/success`
+- `/purchase/cancel`
+
+These pages keep the buyer on the public site and point to support/app activation guidance.
 
 ## Observability
 

@@ -81,6 +81,7 @@ Proof gap:
 
 | Decision | Result | Validation target |
 | --- | --- | --- |
+| Node floor flooring for staged Vite/ESLint upgrades | Explicit Node floor is now pinned to `20.19.0` in `engines.node`, `.nvmrc`, and Node setup steps of `.github/workflows/build.yml` + `.github/workflows/dev-builds.yml` | `node --version` must show 20.19.x+ locally, CI `node-version` now pins 20.19.0 explicitly |
 | Unused direct dependencies | Removed unused stale direct dev packages while keeping `@iconify-json/ph` because `<i-ph-*>` components are used | Frozen install, typecheck, tests, lint, web/Chrome/Firefox builds |
 | `scripts/vue-tsc-fixed.cjs` hidden `semver` dependency | Removed the dead script instead of adding `semver`; package scripts and source no longer reference it | `rg "vue-tsc-fixed|semver"` outside lockfiles should not find runtime package usage |
 | npm package license posture | Added `license: UNLICENSED` to match private product posture | `node -e "console.log(require('./package.json').license)"` |

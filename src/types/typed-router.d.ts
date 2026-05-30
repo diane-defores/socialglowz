@@ -31,7 +31,7 @@ declare module 'vue-router/auto-routes' {
     '/devtools-panel/': RouteRecordInfo<'/devtools-panel/', '/devtools-panel', Record<never, never>, Record<never, never>>,
     '/options-page/': RouteRecordInfo<'/options-page/', '/options-page', Record<never, never>, Record<never, never>>,
     '/setup/install': RouteRecordInfo<'/setup/install', '/setup/install', Record<never, never>, Record<never, never>>,
-    '/setup/SocialFlow': RouteRecordInfo<'/setup/SocialFlow', '/setup/SocialFlow', Record<never, never>, Record<never, never>>,
+    '/setup/SocialGlowz': RouteRecordInfo<'/setup/SocialGlowz', '/setup/SocialGlowz', Record<never, never>, Record<never, never>>,
     '/setup/SocialGlowz/App': RouteRecordInfo<'/setup/SocialGlowz/App', '/setup/SocialGlowz/App', Record<never, never>, Record<never, never>>,
     '/setup/SocialGlowz/components/AppHeader': RouteRecordInfo<'/setup/SocialGlowz/components/AppHeader', '/setup/SocialGlowz/components/AppHeader', Record<never, never>, Record<never, never>>,
     '/setup/SocialGlowz/components/AppRightSidebar': RouteRecordInfo<'/setup/SocialGlowz/components/AppRightSidebar', '/setup/SocialGlowz/components/AppRightSidebar', Record<never, never>, Record<never, never>>,

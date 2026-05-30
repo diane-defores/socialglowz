@@ -44,6 +44,7 @@ declare global {
   const getActivePinia: typeof import('pinia')['getActivePinia']
   const getCurrentInstance: typeof import('vue')['getCurrentInstance']
   const getCurrentScope: typeof import('vue')['getCurrentScope']
+  const getSafeBillingError: typeof import('../../../../../composables/useBillingAccess')['getSafeBillingError']
   const h: typeof import('vue')['h']
   const i18n: typeof import('../../../../../utils/i18n')['i18n']
   const ignorableWatch: typeof import('@vueuse/core')['ignorableWatch']
@@ -153,6 +154,7 @@ declare global {
   const useAuth: typeof import('../../../../../composables/useAuth')['useAuth']
   const useBase64: typeof import('@vueuse/core')['useBase64']
   const useBattery: typeof import('@vueuse/core')['useBattery']
+  const useBillingAccess: typeof import('../../../../../composables/useBillingAccess')['useBillingAccess']
   const useBluetooth: typeof import('@vueuse/core')['useBluetooth']
   const useBreakpoints: typeof import('@vueuse/core')['useBreakpoints']
   const useBroadcastChannel: typeof import('@vueuse/core')['useBroadcastChannel']
@@ -342,8 +344,11 @@ declare global {
 // for type re-export
 declare global {
   // @ts-ignore
-  export type { Component, ComponentPublicInstance, ComputedRef, DirectiveBinding, ExtractDefaultPropTypes, ExtractPropTypes, ExtractPublicPropTypes, InjectionKey, PropType, Ref, MaybeRef, MaybeRefOrGetter, VNode, WritableComputedRef } from 'vue'
+  export type { Component, Slot, Slots, ComponentPublicInstance, ComputedRef, DirectiveBinding, ExtractDefaultPropTypes, ExtractPropTypes, ExtractPublicPropTypes, InjectionKey, PropType, Ref, MaybeRef, MaybeRefOrGetter, VNode, WritableComputedRef } from 'vue'
   import('vue')
+  // @ts-ignore
+  export type { BillingAccessStatus } from '../../../../../composables/useBillingAccess'
+  import('../../../../../composables/useBillingAccess')
   // @ts-ignore
   export type { Account } from '../../../../../stores/accounts'
   import('../../../../../stores/accounts')
@@ -403,6 +408,7 @@ declare module 'vue' {
     readonly getActivePinia: UnwrapRef<typeof import('pinia')['getActivePinia']>
     readonly getCurrentInstance: UnwrapRef<typeof import('vue')['getCurrentInstance']>
     readonly getCurrentScope: UnwrapRef<typeof import('vue')['getCurrentScope']>
+    readonly getSafeBillingError: UnwrapRef<typeof import('../../../../../composables/useBillingAccess')['getSafeBillingError']>
     readonly h: UnwrapRef<typeof import('vue')['h']>
     readonly i18n: UnwrapRef<typeof import('../../../../../utils/i18n')['i18n']>
     readonly ignorableWatch: UnwrapRef<typeof import('@vueuse/core')['ignorableWatch']>
@@ -511,6 +517,7 @@ declare module 'vue' {
     readonly useAuth: UnwrapRef<typeof import('../../../../../composables/useAuth')['useAuth']>
     readonly useBase64: UnwrapRef<typeof import('@vueuse/core')['useBase64']>
     readonly useBattery: UnwrapRef<typeof import('@vueuse/core')['useBattery']>
+    readonly useBillingAccess: UnwrapRef<typeof import('../../../../../composables/useBillingAccess')['useBillingAccess']>
     readonly useBluetooth: UnwrapRef<typeof import('@vueuse/core')['useBluetooth']>
     readonly useBreakpoints: UnwrapRef<typeof import('@vueuse/core')['useBreakpoints']>
     readonly useBroadcastChannel: UnwrapRef<typeof import('@vueuse/core')['useBroadcastChannel']>

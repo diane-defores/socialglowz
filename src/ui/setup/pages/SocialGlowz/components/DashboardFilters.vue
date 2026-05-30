@@ -2,13 +2,28 @@
   <div class="filters-wrapper">
     <div class="filters-group">
       <!-- Date Range Picker -->
-      <Calendar 
-        v-model="filters.dateRange" 
-        selection-mode="range" 
-        :show-icon="true"
-        placeholder="Filtrer par date"
-        :disabled="!currentNetwork"
-      />
+      <div class="date-range-fields">
+        <input
+          aria-label="Date de début"
+          class="date-input"
+          type="date"
+          :disabled="!currentNetwork"
+          :value="formatDateForInput(filters.dateRange[0])"
+          @input="setDateRangeValue(0, $event)"
+        >
+        <span
+          aria-hidden="true"
+          class="date-range-separator"
+        >-</span>
+        <input
+          aria-label="Date de fin"
+          class="date-input"
+          type="date"
+          :disabled="!currentNetwork"
+          :value="formatDateForInput(filters.dateRange[1])"
+          @input="setDateRangeValue(1, $event)"
+        >
+      </div>
 
       <!-- Quick Date Filters -->
       <div class="quick-filters">
@@ -106,8 +121,34 @@ const sortOptions: FilterOption[] = [
 
 const selectQuickDate = (value: string) => {
   filters.value.quickDate = value
-  // Réinitialiser le calendrier si une période rapide est sélectionnée
   filters.value.dateRange = [null, null]
+}
+
+const formatDateForInput = (date: Date | null) => {
+  if (!date) {
+    return ''
+  }
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const parseDateInput = (value: string) => {
+  if (!value) {
+    return null
+  }
+
+  return new Date(`${value}T00:00:00`)
+}
+
+const setDateRangeValue = (index: 0 | 1, event: Event) => {
+  const target = event.target as HTMLInputElement
+  const nextRange: [Date | null, Date | null] = [...filters.value.dateRange]
+  nextRange[index] = parseDateInput(target.value)
+  filters.value.dateRange = nextRange
+  filters.value.quickDate = null
 }
 
 const resetFilters = () => {
@@ -155,15 +196,37 @@ watch(filters, (newFilters) => {
   display: none;
 }
 
-:deep(.p-calendar),
 :deep(.p-multiselect),
 :deep(.p-dropdown) {
   min-width: unset;
   flex-shrink: 1;
 }
 
-:deep(.p-calendar) {
-  width: 200px;
+.date-range-fields {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.date-input {
+  width: 8.25rem;
+  min-height: 2.35rem;
+  border: 1px solid var(--p-content-border-color, #d1d5db);
+  border-radius: 6px;
+  background: var(--p-content-background, #fff);
+  color: var(--p-text-color, #111827);
+  padding: 0.45rem 0.55rem;
+  font: inherit;
+}
+
+.date-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.date-range-separator {
+  color: var(--p-text-muted-color, #6b7280);
 }
 
 :deep(.p-multiselect) {

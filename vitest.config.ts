@@ -11,6 +11,7 @@ export default defineConfig({
     include: [
       "src/**/*.test.ts",
       "convex/**/*.test.ts",
+      "scripts/**/*.test.ts",
     ],
     environment: "node",
     environmentMatchGlobs: [["convex/mutations.test.ts", "edge-runtime"]],

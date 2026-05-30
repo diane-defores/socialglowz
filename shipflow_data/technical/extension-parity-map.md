@@ -27,7 +27,7 @@ linked_systems:
   - "src/ui/options-page/pages/index.vue"
   - "src/ui/setup/pages/install.vue"
   - "src/ui/setup/pages/update.vue"
-  - "src/ui/setup/pages/SocialFlow.vue"
+  - "src/ui/setup/pages/SocialGlowz.vue"
   - "src/content-script/index.ts"
   - "src/devtools/index.ts"
   - "src/offscreen/index.ts"
