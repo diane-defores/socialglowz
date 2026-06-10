@@ -116,7 +116,7 @@ jobs:
         run: pnpm exec tauri android build --ci --debug --apk -t aarch64
 
       - name: Upload Android artifact
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@v7
         with:
           name: socialglowz-android-debug
@@ -168,7 +168,7 @@ jobs:
         run: pnpm exec tauri build --ci
 
       - name: Upload Windows artifact
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@v7
         with:
           name: socialglowz-windows-test
