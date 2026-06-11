@@ -1150,6 +1150,23 @@ class NativeWebViewPlugin(private val activity: Activity) : Plugin(activity) {
         }
     }
 
+    private fun buildDiagnosticHeader(): String {
+        val nowUtc = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }.format(java.util.Date())
+        val nowParis = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("Europe/Paris")
+        }.format(java.util.Date())
+        val versionName = runCatching {
+            activity.packageManager.getPackageInfo(activity.packageName, 0).versionName ?: "unknown"
+        }.getOrDefault("unknown")
+        return listOf(
+            "commit/build: android-$versionName",
+            "build_at_paris: $nowParis",
+            "build_at_utc: $nowUtc",
+        ).joinToString("\n")
+    }
+
     // Usage counters — persisted across app restarts via SharedPreferences
     private val prefs by lazy {
         activity.getSharedPreferences("sfz_network_usage", Context.MODE_PRIVATE)
@@ -3615,7 +3632,7 @@ ${LINKEDIN_THEME_BRIDGE_HELPERS}
 
         // 6. Copy debug logs
         menu.addView(buildPopupMenuItem(density, "\ue957", "Copy debug logs") {  // pi-copy
-            val logText = synchronized(debugLog) { debugLog.joinToString("\n") }
+            val logText = buildDiagnosticHeader() + "\n" + synchronized(debugLog) { debugLog.joinToString("\n") }
             val clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
             clipboard.setPrimaryClip(android.content.ClipData.newPlainText("SFZ Debug Logs", logText))
             dbg("Logs copied to clipboard (${debugLog.size} lines)")

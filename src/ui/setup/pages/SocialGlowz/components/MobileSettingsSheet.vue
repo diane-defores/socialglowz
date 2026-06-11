@@ -186,6 +186,29 @@
             <p class="settings-section-label">{{ $t('billing.section_title') }}</p>
             <BillingAccessPanel />
 
+            <p class="settings-section-label">Support</p>
+            <div class="settings-account-card">
+              <p class="settings-account-hint">
+                Diagnostic de cette installation.
+              </p>
+              <div class="settings-account-actions-row">
+                <span class="settings-account-status">
+                  {{ buildIdentityLabel }}
+                </span>
+                <button
+                  type="button"
+                  class="settings-sync-toggle"
+                  @click="copyDiagnostics"
+                >
+                  <i
+                    class="pi"
+                    :class="diagnosticsCopied ? 'pi-check' : 'pi-copy'"
+                  />
+                  <span>{{ diagnosticsCopied ? $t('common.copied') : $t('common.copy') }}</span>
+                </button>
+              </div>
+            </div>
+
             <!-- Preferences section -->
             <p class="settings-section-label">{{ $t('settings.preferences') }}</p>
 
@@ -318,6 +341,7 @@ import { signIn, signOut as convexSignOut, isAuthenticated, isConvexConfigured }
 import { finalizePasswordSignIn, resetCloudSyncState, resetSyncedLocalState } from '@/lib/cloudSync'
 import { syncSettingsPatch } from '@/lib/cloudSettings'
 import { beginPostAuthSyncFeedback, resetPostAuthSyncFeedback } from '@/lib/postAuthSyncFeedback'
+import { buildDiagnosticsReport, buildIdentityHeader } from '@/lib/buildDiagnostics'
 import { getConvexClient } from '@/lib/convex'
 import { api } from '../../../../../../convex/_generated/api'
 import { useToast } from 'primevue/usetoast'
@@ -375,8 +399,10 @@ const signupError = ref('')
 const signupLoading = ref(false)
 const syncInfoExpanded = ref(false)
 const signupErrorCopied = ref(false)
+const diagnosticsCopied = ref(false)
 const signupErrorExpanded = ref(false)
 const SIGNUP_ERROR_PREVIEW_LENGTH = 180
+const buildIdentityLabel = computed(() => buildIdentityHeader()[0].replace('commit/build: ', ''))
 
 const signupErrorNeedsCollapse = computed(() =>
   signupError.value.length > SIGNUP_ERROR_PREVIEW_LENGTH || signupError.value.includes('\n'),
@@ -561,6 +587,32 @@ async function copySignupError() {
   signupErrorCopied.value = true
   window.setTimeout(() => {
     signupErrorCopied.value = false
+  }, 2000)
+}
+
+async function copyDiagnostics() {
+  const report = buildDiagnosticsReport({
+    account_state: isSignedIn.value && nudge.hasEmailAccount.value ? 'signed_in' : 'signed_out',
+    convex_configured: isConvexConfigured ? 'yes' : 'no',
+    text_zoom: String(textZoomLevel.value),
+    haptic_enabled: String(hapticEnabled.value),
+    tap_sound_enabled: String(tapSoundEnabled.value),
+  })
+
+  try {
+    await navigator.clipboard.writeText(report)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = report
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
+
+  diagnosticsCopied.value = true
+  window.setTimeout(() => {
+    diagnosticsCopied.value = false
   }, 2000)
 }
 

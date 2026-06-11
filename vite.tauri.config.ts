@@ -10,6 +10,8 @@ import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import { defineConfig } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
 import 'dotenv/config'
+// @ts-expect-error commonjs module
+import { defineViteConfig as define } from './define.config.mjs'
 
 const PROJECT_ROOT = dirname(fileURLToPath(import.meta.url))
 const APP_ROOT = 'src/ui/setup/pages/SocialGlowz'
@@ -108,4 +110,5 @@ export default defineConfig({
       },
     },
   },
+  define,
 })

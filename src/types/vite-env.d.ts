@@ -8,6 +8,9 @@ declare const __NAME__: string
 declare const __DISPLAY_NAME__: string
 declare const __CHANGELOG__: string
 declare const __GIT_COMMIT__: string
+declare const __BUILD_ID__: string
+declare const __BUILD_AT_PARIS__: string
+declare const __BUILD_AT_UTC__: string
 declare const __GITHUB_URL__: string
 
 interface Window {
