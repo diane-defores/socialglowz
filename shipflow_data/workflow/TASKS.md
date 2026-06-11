@@ -21,6 +21,7 @@
 ### 🟡 P2 - Medium Priority
 
 🟡 [socialglowz] task: Validate compact mobile network grid on narrow and standard device widths | status: todo | area: mobile-ui | id: sg-mobile-network-grid-qa | impact: medium | effort: low | unblocks: mobile-ui-polish | risk: layout-regression
+🟡 [socialglowz] task: Benchmarker les fonctions createur Android 17 pour WisprFlow/SocialFlowz: Screen Reactions, qualite Instagram, Edits IA on-device, separation audio, Premiere tablette et APV comme inspirations shorts/mobile | status: todo | area: android-creator-workflow | id: sg-android17-creator-workflow-benchmark | impact: medium | effort: medium | unblocks: future-short-creation-ux | risk: platform-opportunity-missed
 
 ### 🟢 Completed
 

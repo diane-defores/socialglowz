@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getSafeBillingError } from './useBillingAccess'
+import { getSafeAccessCheckError, getSafeBillingError } from './useBillingAccess'
 
 describe('getSafeBillingError', () => {
   it.each([
@@ -18,5 +18,25 @@ describe('getSafeBillingError', () => {
     [new Error('Unexpected backend detail'), 'billing.errors.generic'],
   ])('maps %s to %s', (error, key) => {
     expect(getSafeBillingError(error)).toBe(key)
+  })
+})
+
+describe('getSafeAccessCheckError', () => {
+  it('does not expose redemption-code errors during automatic access checks', () => {
+    expect(getSafeAccessCheckError(new Error('code_not_found'))).toBe(
+      'billing.errors.access_check_failed',
+    )
+    expect(getSafeAccessCheckError(new Error('invalid code'))).toBe(
+      'billing.errors.access_check_failed',
+    )
+  })
+
+  it('preserves operational access-check errors', () => {
+    expect(getSafeAccessCheckError(new Error('Suite bridge not configured'))).toBe(
+      'billing.errors.bridge_unavailable',
+    )
+    expect(getSafeAccessCheckError(new Error('Not authenticated'))).toBe(
+      'billing.errors.unauthorized',
+    )
   })
 })

@@ -138,6 +138,7 @@
       "disabled": "This code is no longer available.",
       "used": "This code has already been used.",
       "bridge_unavailable": "Unable to verify activation. The billing bridge is currently unavailable.",
+      "access_check_failed": "Unable to check your access right now. Try again in a moment.",
       "unauthorized": "Sign in before redeeming a code.",
       "unconfigured": "Redemption is unavailable in this build.",
       "generic": "Unable to redeem this code. Please try again."

@@ -47,6 +47,20 @@ export function getSafeBillingError(error: unknown) {
   return 'billing.errors.generic'
 }
 
+export function getSafeAccessCheckError(error: unknown) {
+  const safeError = getSafeBillingError(error)
+
+  if (safeError === 'billing.errors.bridge_unavailable') {
+    return safeError
+  }
+
+  if (safeError === 'billing.errors.unauthorized') {
+    return safeError
+  }
+
+  return 'billing.errors.access_check_failed'
+}
+
 export function useBillingAccess() {
   const access = ref<ProductAccess | null>(null)
   const redeemResult = ref<RedeemResult | null>(null)
@@ -94,7 +108,8 @@ export function useBillingAccess() {
     try {
       access.value = await getConvexClient().action(api.billing.getProductAccess, {})
     } catch (error) {
-      errorKey.value = getSafeBillingError(error)
+      access.value = null
+      errorKey.value = getSafeAccessCheckError(error)
     } finally {
       isLoading.value = false
     }

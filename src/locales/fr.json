@@ -138,6 +138,7 @@
       "disabled": "Ce code n’est plus disponible.",
       "used": "Ce code a déjà été utilisé.",
       "bridge_unavailable": "Impossible de vérifier. Le bridge de facturation est actuellement indisponible.",
+      "access_check_failed": "Impossible de vérifier votre accès pour le moment. Réessayez dans quelques instants.",
       "unauthorized": "Connectez-vous avant d’activer un code.",
       "unconfigured": "L’activation est indisponible dans cette version.",
       "generic": "Impossible d’activer ce code. Réessayez."
