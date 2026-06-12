@@ -1,8 +1,17 @@
-name: Dev Builds (Android + Windows)
+name: SocialGlowz Dev Checks and Manual Builds
 
 on:
   workflow_dispatch:
   push:
+    branches: [master, develop, 'release/**']
+    paths:
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'vite.tauri.config.ts'
+      - '.github/workflows/dev-builds.yml'
+  pull_request:
     branches: [master, develop, 'release/**']
     paths:
       - 'src/**'
@@ -20,8 +29,8 @@ permissions:
   contents: write
 
 jobs:
-  android-debug:
-    name: Android debug APK (arm64)
+  android-checks:
+    name: Android checks
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 60
 
@@ -110,13 +119,85 @@ jobs:
           doppler-token: ${{ secrets.DOPPLER_TOKEN }}
           inject-env-vars: true
 
+  android-debug:
+    name: Manual Android debug build (arm64)
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 60
+    needs:
+      - android-checks
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Configure git safe directory
+        run: git config --global --add safe.directory '*'
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Accept licenses & set NDK
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          NDK_VERSION=$(ls "$ANDROID_HOME/ndk" | sort -V | tail -1)
+          echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> $GITHUB_ENV
+          echo "Using NDK: $NDK_VERSION"
+
+      - name: Cache Gradle
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('**/*.gradle.kts', '**/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20.19.0
+          cache: "pnpm"
+
+      - name: Install Rust stable with Android target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+          shared-key: "tauri-android"
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Initialize Android target
+        run: pnpm exec tauri android init --ci
+
+      - name: Fetch secrets from Doppler
+        uses: dopplerhq/secrets-fetch-action@v2.0.0
+        id: doppler
+        with:
+          doppler-token: ${{ secrets.DOPPLER_TOKEN }}
+          inject-env-vars: true
+
       - name: Build debug APK
         env:
           VITE_CONVEX_URL: ${{ env.VITE_CONVEX_URL || steps.doppler.outputs.VITE_CONVEX_URL }}
         run: pnpm exec tauri android build --ci --debug --apk -t aarch64
 
       - name: Upload Android artifact
-        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@v7
         with:
           name: socialglowz-android-debug
@@ -126,7 +207,7 @@ jobs:
 
   windows-test:
     if: false  # Paused — no Windows PC to test
-    name: Windows test installer
+    name: Windows test build
     runs-on: blacksmith-2vcpu-windows-2025
     timeout-minutes: 60
 
